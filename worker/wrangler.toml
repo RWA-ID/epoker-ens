@@ -1,0 +1,27 @@
+# ENS Hold'em backend — Cloudflare Workers + Durable Objects + D1.
+#
+# Setup:
+#   npx wrangler d1 create epoker            # then paste database_id below
+#   npx wrangler d1 execute epoker --file=schema.sql --remote
+#   npx wrangler deploy
+
+name = "epoker-worker"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# Each poker table is one Durable Object instance — Cloudflare scales
+# horizontally by placing each table near its players; a single table's
+# state is strongly consistent because the DO is single-threaded.
+[[durable_objects.bindings]]
+name = "TABLES"
+class_name = "TableDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TableDO"]
+
+# Leaderboard, bankrolls and the table registry live in D1 (SQLite).
+[[d1_databases]]
+binding = "DB"
+database_name = "epoker"
+database_id = "0acc384c-4925-4b2c-abcd-727c9201f40e"
