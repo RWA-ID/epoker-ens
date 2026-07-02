@@ -39,7 +39,7 @@ export function ActionBar({
   if (!me || me.folded || me.allIn) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-night-900/95 p-3 shadow-2xl backdrop-blur">
+    <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-night-850/95 p-3.5 shadow-2xl backdrop-blur">
       {!isMyTurn ? (
         <p className="py-2 text-center text-sm text-slate-500">
           {state.stage === 'waiting' ? 'Hand starting soon…' : 'Waiting for other players…'}
@@ -56,10 +56,10 @@ export function ActionBar({
                 step={state.smallBlind}
                 value={raiseTo}
                 onChange={(e) => setRaiseTo(Number(e.target.value))}
-                className="flex-1 accent-ens-400"
+                className="flex-1 accent-gold-500"
                 aria-label="Raise amount"
               />
-              <span className="w-24 text-right text-sm tabular-nums text-gold-300">
+              <span className="w-24 text-right font-mono text-sm tabular-nums text-gold-300">
                 {formatChips(Math.min(raiseTo, maxTo))}
               </span>
               <div className="hidden gap-1 sm:flex">
@@ -76,9 +76,9 @@ export function ActionBar({
           <div className="grid grid-cols-4 gap-2">
             <Button variant="danger" onClick={() => onAct('fold')}>Fold</Button>
             {canCheck ? (
-              <Button variant="outline" onClick={() => onAct('check')}>Check</Button>
+              <Button variant="neutral" onClick={() => onAct('check')}>Check</Button>
             ) : (
-              <Button variant="outline" onClick={() => onAct('call')}>
+              <Button variant="neutral" onClick={() => onAct('call')}>
                 Call {formatChips(toCall)}
               </Button>
             )}
@@ -88,7 +88,7 @@ export function ActionBar({
             >
               {isOpening ? 'Bet' : 'Raise to'} {formatChips(Math.min(raiseTo, maxTo))}
             </Button>
-            <Button variant="gold" onClick={() => onAct('allin')}>
+            <Button variant="outline" onClick={() => onAct('allin')}>
               All-in {formatChips(me.stack)}
             </Button>
           </div>

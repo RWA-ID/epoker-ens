@@ -1,7 +1,8 @@
 'use client';
 /**
  * Player profile: ENS identity, chip bankroll, poker stats, daily chip
- * claim, and the $ENS holdings / DAO panel.
+ * claim, and the $ENS holdings / DAO panel. Every number is live —
+ * profile stats come from D1, $ENS figures from on-chain reads.
  */
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -65,53 +66,60 @@ export default function ProfilePage() {
   const canClaim = !profile || Date.now() - profile.lastClaim > 24 * 3600 * 1000;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
+    <div className="mx-auto max-w-4xl px-4 py-14 sm:px-7">
       {/* Identity */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-5">
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt="" className="h-16 w-16 rounded-2xl object-cover ring-2 ring-ens-400/40" />
+          <img
+            src={avatar}
+            alt=""
+            className="h-[76px] w-[76px] rounded-[20px] object-cover shadow-gold ring-2 ring-gold-500/40"
+          />
         ) : (
-          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-ens-800 text-2xl text-white">
+          <span className="gold-fill flex h-[76px] w-[76px] items-center justify-center rounded-[20px] font-display text-[34px] font-bold text-ink shadow-gold ring-2 ring-gold-500/40">
             {displayName(ensName, address).slice(0, 1).toUpperCase()}
           </span>
         )}
         <div>
-          <h1 className="flex items-center gap-2 font-display text-2xl text-slate-50">
+          <h1 className="flex flex-wrap items-center gap-3 font-display text-3xl font-bold text-cream sm:text-[34px]">
             {displayName(ensName, address)}
             {holdings.isVerifiedHolder && <EnsBadge />}
           </h1>
-          <p className="text-xs text-slate-500">{address.toLowerCase()}</p>
+          <p className="mt-2 break-all font-mono text-[13px] text-slate-500">
+            {address.toLowerCase()}
+          </p>
         </div>
       </div>
 
-      <div className="mt-6"><HoldingsBanner /></div>
+      <div className="mt-7"><HoldingsBanner /></div>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         {/* Chips & claim */}
-        <Card>
-          <CardHeader><CardTitle>Chips</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-slate-500">Bankroll</p>
-              <p className="font-display text-4xl text-gold-300">
-                {profile ? formatChips(profile.bankroll) : '—'}
+        <Card className="border-gold-500/25">
+          <CardContent className="p-7">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Bankroll</p>
+            <p className="gold-text mt-2 font-display text-[52px] font-bold leading-none">
+              {profile ? formatChips(profile.bankroll) : '—'}
+            </p>
+            {!profile && (
+              <p className="mt-2 text-xs text-slate-600">
+                Your bankroll is created (10,000 chips) the first time you sit at a table.
               </p>
-              {!profile && (
-                <p className="mt-1 text-xs text-slate-600">
-                  Your bankroll is created (10,000 chips) the first time you sit at a table.
-                </p>
-              )}
-            </div>
-            <Button onClick={claim} disabled={claiming || !canClaim} variant="gold" className="w-full">
-              {claiming ? 'Claiming…' : canClaim ? 'Claim daily chips (+5,000)' : 'Daily chips already claimed'}
+            )}
+            <Button onClick={claim} disabled={claiming || !canClaim} className="mt-6 w-full">
+              {claiming
+                ? 'Claiming…'
+                : canClaim
+                  ? 'Claim daily chips · +5,000'
+                  : 'Daily chips already claimed'}
             </Button>
-            {claimMsg && <p className="text-center text-xs text-slate-400">{claimMsg}</p>}
+            {claimMsg && <p className="mt-3 text-center text-xs text-slate-400">{claimMsg}</p>}
             {/* FUTURE ENS INTEGRATION POINT:
                 when the official ENS distribution contract ships, this claim
                 becomes tiered — verified $ENS holders (and delegated voters)
                 receive boosted amounts, matching worker/src/index.ts. */}
-            <p className="text-center text-[11px] text-slate-600">
+            <p className="mt-3.5 text-center text-[11.5px] text-slate-600">
               ENS holders will receive boosted claims once official rewards launch.
             </p>
           </CardContent>
@@ -119,33 +127,59 @@ export default function ProfilePage() {
 
         {/* Poker stats */}
         <Card>
-          <CardHeader><CardTitle>Poker Record</CardTitle></CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-4">
-              <Stat label="Net profit" value={profile ? `${profile.netProfit >= 0 ? '+' : ''}${formatChips(profile.netProfit)}` : '—'}
-                tone={profile && profile.netProfit < 0 ? 'text-red-400' : 'text-green-400'} />
+          <CardContent className="p-7">
+            <h3 className="mb-5 font-display text-xl font-semibold text-cream">Poker Record</h3>
+            <dl className="grid grid-cols-2 gap-6">
+              <Stat
+                label="Net profit"
+                value={profile ? `${profile.netProfit >= 0 ? '+' : ''}${formatChips(profile.netProfit)}` : '—'}
+                tone={profile && profile.netProfit < 0 ? 'text-red-400' : 'text-green-400'}
+              />
               <Stat label="Hands played" value={profile ? formatChips(profile.handsPlayed) : '—'} />
-              <Stat label="Hands won" value={profile ? `${formatChips(profile.handsWon)} (${winRate}%)` : '—'} />
-              <Stat label="Biggest pot" value={profile ? formatChips(profile.biggestPot) : '—'} />
+              <Stat label="Hands won" value={profile ? `${formatChips(profile.handsWon)} · ${winRate}%` : '—'} />
+              <Stat label="Biggest pot" value={profile ? formatChips(profile.biggestPot) : '—'} tone="text-gold-400" />
             </dl>
           </CardContent>
         </Card>
 
         {/* ENS & DAO snapshot */}
-        <Card className="md:col-span-2">
-          <CardHeader><CardTitle>$ENS &amp; DAO</CardTitle></CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Stat label="$ENS balance" value={holdings.balance.toLocaleString('en-US', { maximumFractionDigits: 2 })} tone="text-ens-300" />
-              <Stat label="Peak held" value={holdings.peak.toLocaleString('en-US', { maximumFractionDigits: 2 })} />
-              <Stat label="Safe to sell" value={holdings.safeToSell.toLocaleString('en-US', { maximumFractionDigits: 2 })} />
-              <Stat label="Delegated" value={holdings.delegated ? 'Yes ✓' : 'Not yet'}
-                tone={holdings.delegated ? 'text-green-400' : 'text-gold-400'} />
+        <Card className="border-ens-400/20 md:col-span-2">
+          <CardContent className="p-7">
+            <h3 className="mb-5 flex items-center gap-2.5 font-display text-xl font-semibold text-cream">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/ens-logo.jpg" alt="ENS" className="h-[22px] w-[22px] rounded-[5px]" />
+              $ENS &amp; DAO
+            </h3>
+            <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+              <Stat
+                label="$ENS balance"
+                value={holdings.balance.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                tone="text-ens-300"
+              />
+              <Stat
+                label="Peak held"
+                value={holdings.peak.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              />
+              <Stat
+                label="Safe to sell"
+                value={holdings.safeToSell.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                tone="text-gold-400"
+              />
+              <Stat
+                label="Delegated"
+                value={holdings.delegated ? 'Yes ✓' : 'Not yet'}
+                tone={holdings.delegated ? 'text-green-400' : 'text-gold-400'}
+              />
             </dl>
             {!holdings.delegated && holdings.isVerifiedHolder && (
-              <p className="mt-4 text-xs text-slate-500">
+              <p className="mt-5 text-xs text-slate-500">
                 Your $ENS isn’t voting yet — delegate it (to yourself or a delegate you trust) at{' '}
-                <a href="https://agora.ensdao.org/delegates" target="_blank" rel="noreferrer" className="text-ens-300 underline">
+                <a
+                  href="https://agora.ensdao.org/delegates"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-ens-300 underline"
+                >
                   agora.ensdao.org
                 </a>{' '}
                 to activate your DAO voice. It never leaves your wallet.
@@ -161,8 +195,8 @@ export default function ProfilePage() {
 function Stat({ label, value, tone = 'text-slate-100' }: { label: string; value: string; tone?: string }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-widest text-slate-500">{label}</dt>
-      <dd className={`mt-1 text-lg font-semibold tabular-nums ${tone}`}>{value}</dd>
+      <dt className="text-[11px] uppercase tracking-[0.14em] text-slate-500">{label}</dt>
+      <dd className={`mt-1.5 font-mono text-[21px] font-semibold tabular-nums ${tone}`}>{value}</dd>
     </div>
   );
 }

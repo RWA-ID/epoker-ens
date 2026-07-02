@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 const SUIT_GLYPH: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 const SUIT_COLOR: Record<string, string> = {
-  s: 'text-night-950', c: 'text-night-950',
+  s: 'text-ink', c: 'text-ink',
   h: 'text-red-600', d: 'text-red-600',
 };
 
@@ -19,9 +19,9 @@ export function PlayingCard({
   className?: string;
 }) {
   const dims = {
-    sm: 'h-10 w-7 text-[10px] rounded',
-    md: 'h-14 w-10 text-sm rounded-md',
-    lg: 'h-20 w-14 text-lg rounded-lg',
+    sm: 'h-10 w-7 text-xs rounded-[5px]',
+    md: 'h-[70px] w-[50px] text-[21px] rounded-lg',
+    lg: 'h-20 w-14 text-2xl rounded-[9px]',
   }[size];
 
   if (faceDown || !card) {
@@ -29,12 +29,12 @@ export function PlayingCard({
       <div
         className={cn(
           dims,
-          'animate-dealIn border border-ens-300/30 bg-gradient-to-br from-ens-800 to-ens-950',
-          'flex items-center justify-center shadow-md',
+          'animate-dealIn border border-gold-500/30 bg-gradient-to-br from-[#17376f] to-[#0a1a3e]',
+          'flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.55)]',
           className,
         )}
       >
-        <span className="font-display text-gold-500/70 text-[0.9em]">◆</span>
+        <span className="text-[0.9em] text-gold-500/40">♠</span>
       </div>
     );
   }
@@ -46,13 +46,14 @@ export function PlayingCard({
     <div
       className={cn(
         dims,
-        'animate-dealIn flex flex-col items-center justify-center bg-slate-50 shadow-md',
-        SUIT_COLOR[suit],
+        'animate-dealIn flex items-center justify-center border border-black/10 bg-cream shadow-[0_4px_14px_rgba(0,0,0,0.55)]',
         className,
       )}
     >
-      <span className="font-bold leading-none">{rank}</span>
-      <span className="leading-none">{SUIT_GLYPH[suit]}</span>
+      <span className={cn('font-display font-bold leading-none', SUIT_COLOR[suit])}>
+        {rank}
+        {SUIT_GLYPH[suit]}
+      </span>
     </div>
   );
 }

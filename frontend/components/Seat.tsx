@@ -1,8 +1,9 @@
 'use client';
 /**
- * One seat around the felt: avatar, ENS name, stack, current bet,
- * dealer button, action-timer ring, and hole cards (yours face-up,
- * everyone else's face-down until showdown reveals them).
+ * One seat around the rail: a backdrop-blurred pill with avatar, ENS
+ * name and mono stack, plus current bet, dealer button, action-timer
+ * ring, and hole cards (yours face-up, everyone else's face-down until
+ * showdown reveals them).
  */
 import { useEffect, useState } from 'react';
 import type { SeatView, Card } from '@/lib/types';
@@ -29,13 +30,12 @@ export function Seat({
     return onSit ? (
       <button
         onClick={onSit}
-        className="flex h-20 w-24 flex-col items-center justify-center rounded-xl border border-dashed border-white/20 text-xs text-slate-400 transition-colors hover:border-gold-500/60 hover:text-gold-400"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-gold-500/40 bg-night-950/60 px-3.5 py-2 text-xs text-gold-400/80 backdrop-blur-sm transition-colors hover:border-gold-500/80 hover:bg-gold-500/10 hover:text-gold-300"
       >
-        <span className="text-lg leading-none">+</span>
-        Sit here
+        <span className="text-sm leading-none">+</span> Sit here
       </button>
     ) : (
-      <div className="h-20 w-24 rounded-xl border border-dashed border-white/10" />
+      <div className="h-8 w-8 rounded-full border border-dashed border-white/15 bg-night-950/40" />
     );
   }
 
@@ -43,49 +43,56 @@ export function Seat({
   const hasCards = inHand && !view.folded && (showCards?.length || !isYou);
 
   return (
-    <div className={cn('flex w-28 flex-col items-center gap-1', view.folded && 'opacity-40')}>
+    <div className={cn('flex flex-col items-center gap-1', view.folded && 'opacity-40')}>
       {/* Hole cards */}
-      <div className="flex h-11 gap-1">
-        {hasCards ? (
-          showCards?.length ? (
+      {hasCards ? (
+        <div className="flex gap-1">
+          {showCards?.length ? (
             showCards.map((c, i) => <PlayingCard key={i} card={c} size="sm" />)
           ) : (
             <>
               <PlayingCard size="sm" faceDown />
               <PlayingCard size="sm" faceDown />
             </>
-          )
-        ) : null}
-      </div>
+          )}
+        </div>
+      ) : null}
 
-      {/* Player plate */}
+      {/* Player pill */}
       <div
         className={cn(
-          'relative flex w-full items-center gap-2 rounded-xl border bg-night-900/95 px-2 py-1.5',
+          'relative flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-md',
           view.acting
-            ? 'animate-pulseRing border-ens-400'
+            ? 'animate-pulseRing border-ens-400 bg-night-950/75'
             : isYou
-              ? 'border-gold-500/50'
-              : 'border-white/10',
+              ? 'border-gold-500/60 bg-gold-500/[0.18]'
+              : 'border-gold-500/25 bg-night-950/70',
           !view.connected && 'grayscale',
         )}
       >
         {view.avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={view.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          <img
+            src={view.avatar}
+            alt=""
+            className="h-[30px] w-[30px] shrink-0 rounded-full border-2 border-gold-300/50 object-cover sm:h-[34px] sm:w-[34px]"
+          />
         ) : (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ens-800 text-xs text-white">
+          <span className="gold-fill flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border-2 border-gold-300/70 font-display text-[13px] font-bold text-night-900 sm:h-[34px] sm:w-[34px]">
             {displayName(view.ensName, view.address).slice(0, 1).toUpperCase()}
           </span>
         )}
-        <div className="min-w-0">
-          <p className="truncate text-[11px] font-medium text-slate-100">
+        <div className="min-w-0 text-left">
+          <p className="max-w-24 truncate text-[11px] font-semibold text-slate-100 sm:max-w-28 sm:text-[11.5px]">
+            {isYou ? 'You · ' : ''}
             {displayName(view.ensName, view.address)}
           </p>
-          <p className="text-[11px] tabular-nums text-gold-300">{formatChips(view.stack)}</p>
+          <p className="font-mono text-[10.5px] tabular-nums text-gold-400 sm:text-[11px]">
+            {formatChips(view.stack)}
+          </p>
         </div>
         {view.isButton && (
-          <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[9px] font-bold text-night-950 shadow">
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-cream text-[9px] font-bold text-night-950 shadow">
             D
           </span>
         )}
@@ -101,7 +108,7 @@ export function Seat({
 
       {/* Current street bet, displayed as chips in front of the seat */}
       {view.bet > 0 && (
-        <span className="rounded-full bg-night-950/80 px-2 py-0.5 text-[10px] tabular-nums text-ens-300 ring-1 ring-ens-400/30">
+        <span className="rounded-full border border-gold-500/30 bg-night-950/80 px-2 py-0.5 font-mono text-[10px] tabular-nums text-gold-300">
           {formatChips(view.bet)}
         </span>
       )}
@@ -120,7 +127,7 @@ function TimerBar({ deadline }: { deadline: number }) {
     return () => clearInterval(id);
   }, [deadline]);
   return (
-    <div className="h-1 w-full overflow-hidden rounded-full bg-night-800">
+    <div className="h-1 w-20 overflow-hidden rounded-full bg-night-800/90">
       <div
         className={cn('h-full transition-all', pct < 30 ? 'bg-red-500' : 'bg-ens-400')}
         style={{ width: `${pct}%` }}

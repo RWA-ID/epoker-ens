@@ -16,12 +16,17 @@ import { useEnsIdentity } from '@/lib/ens';
 import { ensureAuth, cachedSignature } from '@/lib/auth';
 import { useTableSocket } from '@/lib/ws';
 import { isMuted, setMuted } from '@/lib/sounds';
-import { displayName, formatChips } from '@/lib/utils';
+import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PokerTable } from '@/components/PokerTable';
 import { ActionBar } from '@/components/ActionBar';
 import { ChatPanel } from '@/components/ChatPanel';
 import { HoldingsBanner } from '@/components/HoldingsBanner';
+
+const STAGE_LABEL: Record<string, string> = {
+  waiting: 'Waiting', preflop: 'Pre-flop', flop: 'Flop',
+  turn: 'Turn', river: 'River', showdown: 'Showdown',
+};
 
 export default function TablePage() {
   return (
@@ -110,58 +115,84 @@ function TableInner() {
   }
 
   const me = state.yourSeat !== null ? state.seats.find((s) => s.seat === state.yourSeat) : undefined;
+  const inHand = state.stage !== 'waiting';
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10">
+    <div className="mx-auto max-w-6xl px-4 pb-14 pt-7 sm:px-7">
       {/* Table header bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 py-4">
-        <div>
-          <h1 className="font-display text-xl text-slate-100">{state.name}</h1>
-          <p className="text-xs text-slate-500">
-            Blinds {state.smallBlind}/{state.bigBlind} · Buy-in {formatChips(state.buyIn)} ·{' '}
-            {state.seats.length}/{state.maxPlayers} seated
-            {!table.connected && <span className="text-red-400"> · reconnecting…</span>}
-          </p>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5">
+        <div className="flex items-center gap-3.5">
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="border border-white/10 bg-white/[0.04]">
+              ← Lobby
+            </Button>
+          </Link>
+          <div>
+            <h1 className="font-display text-[22px] font-semibold leading-tight text-cream">
+              {state.name}
+            </h1>
+            <p className="mt-0.5 font-mono text-xs text-slate-500">
+              Blinds {state.smallBlind} / {state.bigBlind} · Buy-in {formatChips(state.buyIn)} ·{' '}
+              {state.seats.length} / {state.maxPlayers} seated
+              {inHand && ` · Hand #${state.handNumber}`}
+              {!table.connected && <span className="text-red-400"> · reconnecting…</span>}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]',
+              inHand
+                ? 'border-green-400/30 bg-green-400/10 text-green-400'
+                : 'border-gold-500/30 bg-gold-500/10 text-gold-400',
+            )}
+          >
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                inHand ? 'animate-livePulse bg-green-400' : 'bg-gold-400',
+              )}
+            />
+            {inHand ? `In hand · ${STAGE_LABEL[state.stage]}` : 'Waiting for players'}
+          </span>
           <Button variant="ghost" size="sm" onClick={() => { setMuted(!muted); setMutedState(!muted); }}>
             {muted ? '🔇 Sounds off' : '🔊 Sounds on'}
           </Button>
           <Button variant="outline" size="sm" onClick={copyInvite}>
-            {copied ? 'Copied!' : '🔗 Invite friends'}
+            {copied ? 'Copied!' : '🔗 Invite frENS'}
           </Button>
           {me && (
             <Button variant="danger" size="sm" onClick={table.leave}>
               Leave table
             </Button>
           )}
-          <Link href="/"><Button variant="ghost" size="sm">Lobby</Button></Link>
         </div>
       </div>
 
       {table.error && (
-        <div className="mb-3 rounded-lg border border-red-500/40 bg-red-950/40 px-4 py-2 text-sm text-red-300">
+        <div className="mb-3 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-2 text-sm text-red-300">
           {table.error}
         </div>
       )}
 
       {/* Felt + chat */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
         <div>
           <PokerTable state={state} onSit={table.sit} />
-          <div className="mt-2">
+          <div className="mt-4">
             <ActionBar state={state} onAct={table.act} />
           </div>
           {/* Post-hand result + DAO nudge (product requirement #5) */}
           {table.lastResult && state.stage === 'showdown' && (
-            <div className="mx-auto mt-3 max-w-3xl rounded-xl border border-gold-500/30 bg-night-900/90 px-4 py-3 text-center text-sm">
+            <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-gold-500/30 bg-gradient-to-b from-[#18140c]/80 to-night-850/80 px-5 py-4 text-center text-sm">
               {table.lastResult.winners.map((w, i) => (
-                <p key={i} className="text-gold-300">
+                <p key={i} className="font-display text-base font-semibold text-gold-300">
                   🏆 {displayName(w.ensName, w.address)} wins {formatChips(w.amount)}
                   {w.handName ? ` with ${w.handName}` : ''}
                 </p>
               ))}
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1.5 text-xs text-slate-500">
                 Winners hold. So do DAO voters — keep your $ENS and make it count at{' '}
                 <a href="https://agora.ensdao.org" target="_blank" rel="noreferrer" className="underline">
                   agora.ensdao.org

@@ -1,6 +1,6 @@
 # ENS Hold'em — epoker.eth ♠️
 
-![ENS High Roller Table](frontend/public/hero-table.png)
+![ENS High Roller Table](docs/hero-table.png)
 
 **Browser-based multiplayer Texas Hold'em for the ENS community.** Your primary
 ENS name is your handle at the table, hands only start with **4+ players**

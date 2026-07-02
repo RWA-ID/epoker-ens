@@ -28,11 +28,11 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex h-72 flex-col rounded-2xl border border-white/10 bg-night-900/80 lg:h-full">
-      <div className="border-b border-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+    <div className="flex h-72 flex-col rounded-2xl border border-white/[0.07] bg-night-850/60 lg:h-full">
+      <div className="border-b border-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
         Table Chat
       </div>
-      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto p-3 text-sm">
+      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto p-3.5 text-sm">
         {messages.length === 0 && (
           <p className="text-xs text-slate-600">Say hi to the table…</p>
         )}
@@ -40,7 +40,7 @@ export function ChatPanel({
           const mine = m.address === you;
           return (
             <p key={i} className="leading-snug">
-              <span className={mine ? 'text-gold-400' : 'text-ens-300'}>
+              <span className={mine ? 'font-medium text-gold-400' : 'font-medium text-ens-300'}>
                 {displayName(m.ensName, m.address)}:
               </span>{' '}
               <span className="text-slate-300">{m.text}</span>
@@ -48,18 +48,18 @@ export function ChatPanel({
           );
         })}
       </div>
-      <div className="flex gap-2 border-t border-white/5 p-2">
+      <div className="flex gap-2 border-t border-white/5 p-2.5">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Message…"
           maxLength={280}
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-night-950 px-3 py-1.5 text-sm outline-none placeholder:text-slate-600 focus:border-ens-400/60"
+          className="min-w-0 flex-1 rounded-[9px] border border-white/10 bg-night-900 px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-slate-600 focus:border-gold-500/60"
         />
         <button
           onClick={submit}
-          className="rounded-lg bg-ens-500 px-3 text-sm font-medium text-white hover:bg-ens-400"
+          className="gold-fill rounded-[9px] px-3.5 text-sm font-semibold text-ink transition-transform hover:-translate-y-px"
         >
           Send
         </button>

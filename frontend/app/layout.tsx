@@ -1,11 +1,16 @@
 import type { Metadata } from 'next';
-import { Playfair_Display, Inter } from 'next/font/google';
+import { Playfair_Display, Inter, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Header } from '@/components/Header';
 
 const display = Playfair_Display({ subsets: ['latin'], variable: '--font-display' });
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const mono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-mono',
+});
 
 export const metadata: Metadata = {
   title: 'ENS Hold’em — epoker.eth',
@@ -15,28 +20,28 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable}`}>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="font-sans min-h-screen flex flex-col">
         <Providers>
           <Header />
           <main className="flex-1">{children}</main>
-          <footer className="border-t border-white/5 py-6 text-center text-xs text-slate-500">
-            <div className="mx-auto flex max-w-4xl flex-col items-center gap-3 px-4">
-              <p>
+          <footer className="mt-auto border-t border-white/5 px-4 py-9">
+            <div className="mx-auto flex max-w-3xl flex-col items-center gap-3.5 text-center">
+              <p className="text-[13px] text-slate-400">
                 <span className="font-display text-gold-400">epoker.eth</span> · ENS High Roller
                 Table · virtual chips only — no real-money gambling
               </p>
-              <p className="text-slate-600">
+              <p className="max-w-xl text-[11.5px] leading-relaxed text-slate-600">
                 Independent community project. Not affiliated with, endorsed by, or connected to
                 ENS, ENS DAO, or ENS Labs. “ENS” is referenced solely to describe compatibility
                 with the Ethereum Name Service.
               </p>
-              <div className="flex items-center gap-4">
+              <div className="mt-0.5 flex items-center gap-4">
                 <a
                   href="https://x.com/ensgianteth"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-slate-400 transition-colors hover:text-slate-100"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-200"
                 >
                   {/* X (Twitter) logo */}
                   <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
@@ -49,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   href="https://github.com/RWA-ID/epoker-ens"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-slate-400 transition-colors hover:text-slate-100"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-200"
                 >
                   {/* GitHub logo */}
                   <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
