@@ -154,6 +154,37 @@ Alternatives: `npx wrangler pages deploy out` (CF Pages) or import
   (base-rate daily chips, badge removed) until re-acquired.
 - Nothing is ever taken from the wallet — the system only *reads* balances.
 
+## 📣 To the ENS team, ENS DAO & delegates
+
+ENS Hold'em is a community-built engagement engine for ENS: every player is a
+wallet with a primary name, every session reinforces holding and delegating
+$ENS, and the leaderboard is a public, sybil-resistant-ish record of the most
+engaged players. What it's missing is the reward layer — and that layer should
+be official, not ours.
+
+**The ask:**
+
+1. **Seed a prize pool.** A donation or small grant of $ENS (even a few
+   hundred tokens per season) escrowed in a DAO-controlled contract would let
+   leaderboard seasons pay real rewards to the community the DAO most wants to
+   activate: engaged, delegated holders.
+2. **Build (or bless) the distribution contract.** A minimal
+   `EnsHoldemRewards` contract — DAO-funded, Merkle-claim per season, with
+   eligibility weighted by *holding duration and delegation status*, not just
+   chips won — plugs directly into the hooks already marked in this codebase
+   (see below). We will happily implement it to the DAO's spec and hand over
+   ownership; governance keeps the keys and the kill switch.
+3. **Tell us what to change.** Game economy, eligibility rules, branding
+   boundaries — open an issue or reach out via
+   [@ensgianteth](https://x.com/ensgianteth). This project is independent
+   (see the disclaimer above) and we want to keep it aligned with what the
+   DAO considers healthy incentives.
+
+Why it's worth it: poker retention loops are strong, the 4-player minimum
+makes every active player a recruiter, and every reward claim is another
+wallet that holds and delegates $ENS instead of leaving it idle on an
+exchange.
+
 ### Future official ENS distribution contract — integration points
 
 Marked with `FUTURE ENS INTEGRATION POINT` comments in code:
