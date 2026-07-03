@@ -17,6 +17,9 @@ import { evaluate7 } from './poker/evaluator';
 import { settlePots, Contributor } from './poker/pots';
 import type { Env } from './env';
 
+/** How long a table may sit empty before it is closed and delisted. */
+const EMPTY_TABLE_CLOSE_MS = 60_000;
+
 interface Player {
   seat: number;
   address: string; // lowercase 0x…
@@ -264,6 +267,8 @@ export class TableDO implements DurableObject {
       connected: true,
     });
 
+    // Someone sat down — cancel any pending empty-table close.
+    await this.state.storage.deleteAlarm().catch(() => { /* noop */ });
     await this.syncLobbyCount();
     this.broadcast();
     this.maybeStartHand();
@@ -288,16 +293,46 @@ export class TableDO implements DurableObject {
     await this.env.DB.prepare('UPDATE players SET bankroll = bankroll + ? WHERE address = ?')
       .bind(player.stack, address).run().catch(() => { /* stats are best-effort */ });
 
+    if (this.players.size === 0) {
+      // Last player gone — close the table after a grace window (so a quick
+      // refresh or re-sit doesn't kill it). A DO alarm survives eviction,
+      // unlike setTimeout.
+      await this.state.storage.setAlarm(Date.now() + EMPTY_TABLE_CLOSE_MS)
+        .catch(() => { /* best-effort */ });
+    }
+
     await this.syncLobbyCount();
     this.broadcast();
+  }
+
+  /** Alarm = the empty-table grace window elapsed. Close the table for good. */
+  async alarm() {
+    if (!this.config || this.players.size > 0) return;
+    await this.env.DB.prepare('DELETE FROM tables WHERE id = ?')
+      .bind(this.config.id).run().catch(() => { /* re-swept by the lobby */ });
+    // Tell any remaining spectators, then close without triggering the
+    // client's auto-reconnect (it skips reconnection on code 4000).
+    for (const sock of this.sockets.keys()) {
+      this.send(sock, { type: 'error', error: 'Table closed — everyone left.' });
+      try { sock.close(4000, 'table closed'); } catch { /* noop */ }
+    }
+    this.sockets.clear();
+    await this.state.storage.deleteAll();
+    this.config = null;
   }
 
   /** Keep the lobby's seat count fresh for the table list. */
   private async syncLobbyCount() {
     if (!this.config) return;
-    await this.env.DB.prepare('UPDATE tables SET seats = ?, status = ? WHERE id = ?')
-      .bind(this.players.size, this.stage === 'waiting' ? 'waiting' : 'playing', this.config.id)
-      .run().catch(() => { /* best-effort */ });
+    // Upsert (not update) so a table swept from the lobby while momentarily
+    // empty re-registers itself if players come back before the alarm fires.
+    await this.env.DB.prepare(
+      `INSERT INTO tables (id, name, small_blind, seats, status, created_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET seats = excluded.seats, status = excluded.status`,
+    ).bind(
+      this.config.id, this.config.name, this.config.smallBlind,
+      this.players.size, this.stage === 'waiting' ? 'waiting' : 'playing', Date.now(),
+    ).run().catch(() => { /* best-effort */ });
   }
 
   /* ------------------------------------------------------------------ */

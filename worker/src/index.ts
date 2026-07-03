@@ -53,6 +53,11 @@ export default {
       /* ---------------- Lobby ---------------- */
 
       if (path === '/tables' && request.method === 'GET') {
+        // Sweep long-empty tables (rows created before the DO alarm-based
+        // cleanup existed, or whose alarm was somehow missed). Active tables
+        // that were swept in a race re-register via the DO's lobby upsert.
+        await env.DB.prepare('DELETE FROM tables WHERE seats = 0 AND created_at < ?')
+          .bind(Date.now() - 30 * 60_000).run().catch(() => { /* best-effort */ });
         const { results } = await env.DB.prepare(
           `SELECT id, name, small_blind AS smallBlind, seats, status, created_at AS createdAt
            FROM tables ORDER BY seats DESC, created_at DESC LIMIT 50`,
