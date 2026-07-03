@@ -30,12 +30,12 @@ export function Seat({
     return onSit ? (
       <button
         onClick={onSit}
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-gold-500/40 bg-night-950/60 px-3.5 py-2 text-xs text-gold-400/80 backdrop-blur-sm transition-colors hover:border-gold-500/80 hover:bg-gold-500/10 hover:text-gold-300"
+        className="flex items-center gap-2 whitespace-nowrap rounded-full border border-dashed border-gold-500/40 bg-night-950/60 px-4 py-2.5 text-[13px] text-gold-400/80 backdrop-blur-sm transition-colors hover:border-gold-500/80 hover:bg-gold-500/10 hover:text-gold-300"
       >
-        <span className="text-sm leading-none">+</span> Sit here
+        <span className="text-base leading-none">+</span> Sit here
       </button>
     ) : (
-      <div className="h-8 w-8 rounded-full border border-dashed border-white/15 bg-night-950/40" />
+      <div className="h-10 w-10 rounded-full border border-dashed border-white/15 bg-night-950/40" />
     );
   }
 
@@ -61,7 +61,7 @@ export function Seat({
       {/* Player pill */}
       <div
         className={cn(
-          'relative flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-md',
+          'relative flex items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-4 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-md',
           view.acting
             ? 'animate-pulseRing border-ens-400 bg-night-950/75'
             : isYou
@@ -75,29 +75,29 @@ export function Seat({
           <img
             src={view.avatar}
             alt=""
-            className="h-[30px] w-[30px] shrink-0 rounded-full border-2 border-gold-300/50 object-cover sm:h-[34px] sm:w-[34px]"
+            className="h-[42px] w-[42px] shrink-0 rounded-full border-2 border-gold-300/50 object-cover sm:h-[48px] sm:w-[48px]"
           />
         ) : (
-          <span className="gold-fill flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border-2 border-gold-300/70 font-display text-[13px] font-bold text-night-900 sm:h-[34px] sm:w-[34px]">
+          <span className="gold-fill flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border-2 border-gold-300/70 font-display text-[18px] font-bold text-night-900 sm:h-[48px] sm:w-[48px]">
             {displayName(view.ensName, view.address).slice(0, 1).toUpperCase()}
           </span>
         )}
         <div className="min-w-0 text-left">
-          <p className="max-w-24 truncate text-[11px] font-semibold text-slate-100 sm:max-w-28 sm:text-[11.5px]">
+          <p className="max-w-32 truncate text-[13px] font-semibold text-slate-100 sm:max-w-40 sm:text-[14px]">
             {isYou ? 'You · ' : ''}
             {displayName(view.ensName, view.address)}
           </p>
-          <p className="font-mono text-[10.5px] tabular-nums text-gold-400 sm:text-[11px]">
+          <p className="font-mono text-[12px] tabular-nums text-gold-400 sm:text-[12.5px]">
             {formatChips(view.stack)}
           </p>
         </div>
         {view.isButton && (
-          <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-cream text-[9px] font-bold text-night-950 shadow">
+          <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-cream text-[10px] font-bold text-night-950 shadow">
             D
           </span>
         )}
         {view.allIn && (
-          <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded bg-red-600 px-1.5 text-[9px] font-bold uppercase text-white">
+          <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded bg-red-600 px-2 text-[10px] font-bold uppercase text-white">
             All-in
           </span>
         )}
@@ -108,7 +108,7 @@ export function Seat({
 
       {/* Current street bet, displayed as chips in front of the seat */}
       {view.bet > 0 && (
-        <span className="rounded-full border border-gold-500/30 bg-night-950/80 px-2 py-0.5 font-mono text-[10px] tabular-nums text-gold-300">
+        <span className="rounded-full border border-gold-500/30 bg-night-950/80 px-2.5 py-0.5 font-mono text-[11.5px] tabular-nums text-gold-300">
           {formatChips(view.bet)}
         </span>
       )}
@@ -127,7 +127,7 @@ function TimerBar({ deadline }: { deadline: number }) {
     return () => clearInterval(id);
   }, [deadline]);
   return (
-    <div className="h-1 w-20 overflow-hidden rounded-full bg-night-800/90">
+    <div className="h-1 w-28 overflow-hidden rounded-full bg-night-800/90">
       <div
         className={cn('h-full transition-all', pct < 30 ? 'bg-red-500' : 'bg-ens-400')}
         style={{ width: `${pct}%` }}

@@ -28,11 +28,11 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex h-72 flex-col rounded-2xl border border-white/[0.07] bg-night-850/60 lg:h-full">
+    <div className="flex h-72 flex-col rounded-2xl border border-white/[0.07] bg-night-850/60 lg:h-auto lg:min-h-0 lg:flex-1">
       <div className="border-b border-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
         Table Chat
       </div>
-      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto p-3.5 text-sm">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3.5 text-sm">
         {messages.length === 0 && (
           <p className="text-xs text-slate-600">Say hi to the table…</p>
         )}

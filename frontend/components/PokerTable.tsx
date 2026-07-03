@@ -35,7 +35,7 @@ export function PokerTable({
   const canSit = state.yourSeat === null && state.seats.length < state.maxPlayers;
 
   return (
-    <div className="relative mx-auto w-full max-w-4xl select-none">
+    <div className="relative mx-auto w-full max-w-6xl select-none">
       {/* The table art */}
       <div className="relative aspect-[3/2] w-full overflow-hidden rounded-[26px] border border-gold-500/40 shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_30px_70px_rgba(0,0,0,0.6)]">
         <div
@@ -56,7 +56,7 @@ export function PokerTable({
           {state.community.length > 0 && (
             <div className="flex gap-1.5 sm:gap-2">
               {state.community.map((c: Card, i: number) => (
-                <PlayingCard key={i} card={c} size="md" />
+                <PlayingCard key={i} card={c} size="lg" />
               ))}
             </div>
           )}

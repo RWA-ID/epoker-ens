@@ -7,7 +7,7 @@
  * Flow: connect wallet → one-time sign-in signature → WebSocket to the
  * table's Durable Object → sit → play.
  */
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSignMessage } from 'wagmi';
@@ -66,6 +66,18 @@ function TableInner() {
     }
   };
 
+  // Auto-prompt the one-time sign-in as soon as the wallet is connected, so
+  // joining a table is just Join → confirm in wallet (no extra click). A
+  // cached signature resolves silently; a rejection falls back to the manual
+  // retry button below. One attempt per address.
+  const autoSignedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isConnected || !address || sig) return;
+    if (autoSignedFor.current === address) return;
+    autoSignedFor.current = address;
+    signIn();
+  }, [isConnected, address, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const identity = useMemo(
     () => (address && sig ? { address: address.toLowerCase(), sig, ensName, avatar } : null),
     [address, sig, ensName, avatar],
@@ -98,10 +110,14 @@ function TableInner() {
   }
   if (!sig) {
     return (
-      <PageNote text="Sign once (gas-free) to prove wallet ownership to the table server.">
-        <Button onClick={signIn} disabled={signing}>
-          {signing ? 'Check your wallet…' : 'Sign In to Play'}
-        </Button>
+      <PageNote
+        text={
+          signing
+            ? 'Confirm the sign-in request in your wallet — gas-free, proves wallet ownership.'
+            : 'Sign once (gas-free) to prove wallet ownership to the table server.'
+        }
+      >
+        {!signing && <Button onClick={signIn}>Sign In to Play</Button>}
         {signError && <p className="text-xs text-red-400">{signError}</p>}
       </PageNote>
     );
@@ -118,7 +134,7 @@ function TableInner() {
   const inHand = state.stage !== 'waiting';
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-14 pt-7 sm:px-7">
+    <div className="mx-auto max-w-[1400px] px-4 pb-14 pt-7 sm:px-7">
       {/* Table header bar */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5">
         <div className="flex items-center gap-3.5">
@@ -177,7 +193,7 @@ function TableInner() {
       )}
 
       {/* Felt + chat */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <div>
           <PokerTable state={state} onSit={table.sit} />
           <div className="mt-4">
@@ -201,9 +217,13 @@ function TableInner() {
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-4">
-          <ChatPanel messages={table.chat} onSend={table.say} you={identity?.address} />
-          <HoldingsBanner compact />
+        {/* lg: absolute inset pins the sidebar to the felt column's height, so
+            chat scrolls internally instead of growing the page as messages arrive */}
+        <div className="lg:relative">
+          <div className="flex flex-col gap-4 lg:absolute lg:inset-0">
+            <ChatPanel messages={table.chat} onSend={table.say} you={identity?.address} />
+            <HoldingsBanner compact />
+          </div>
         </div>
       </div>
     </div>
