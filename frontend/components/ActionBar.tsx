@@ -48,7 +48,7 @@ export function ActionBar({
         <div className="flex flex-col gap-3">
           {/* Raise sizing */}
           {maxTo > state.currentBet && (
-            <div className="flex items-center gap-3 px-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
               <input
                 type="range"
                 min={minTo}
@@ -56,10 +56,10 @@ export function ActionBar({
                 step={state.smallBlind}
                 value={raiseTo}
                 onChange={(e) => setRaiseTo(Number(e.target.value))}
-                className="flex-1 accent-gold-500"
+                className="min-w-32 flex-1 accent-gold-500"
                 aria-label="Raise amount"
               />
-              <span className="w-24 text-right font-mono text-sm tabular-nums text-gold-300">
+              <span className="w-20 text-right font-mono text-sm tabular-nums text-gold-300 sm:w-24">
                 {formatChips(Math.min(raiseTo, maxTo))}
               </span>
               <div className="hidden gap-1 sm:flex">
@@ -72,23 +72,28 @@ export function ActionBar({
             </div>
           )}
 
-          {/* Actions */}
-          <div className="grid grid-cols-4 gap-2">
-            <Button variant="danger" onClick={() => onAct('fold')}>Fold</Button>
+          {/* Actions — 2×2 on phones, one row from sm up */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Button variant="danger" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('fold')}>
+              Fold
+            </Button>
             {canCheck ? (
-              <Button variant="neutral" onClick={() => onAct('check')}>Check</Button>
+              <Button variant="neutral" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('check')}>
+                Check
+              </Button>
             ) : (
-              <Button variant="neutral" onClick={() => onAct('call')}>
+              <Button variant="neutral" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('call')}>
                 Call {formatChips(toCall)}
               </Button>
             )}
             <Button
+              className="px-2 text-[13px] sm:px-4 sm:text-sm"
               onClick={() => onAct(isOpening ? 'bet' : 'raise', Math.min(raiseTo, maxTo))}
               disabled={maxTo <= state.currentBet}
             >
               {isOpening ? 'Bet' : 'Raise to'} {formatChips(Math.min(raiseTo, maxTo))}
             </Button>
-            <Button variant="outline" onClick={() => onAct('allin')}>
+            <Button variant="outline" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('allin')}>
               All-in {formatChips(me.stack)}
             </Button>
           </div>

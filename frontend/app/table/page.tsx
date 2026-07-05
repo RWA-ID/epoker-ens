@@ -150,12 +150,18 @@ function TableInner() {
             <p className="mt-0.5 font-mono text-xs text-slate-500">
               Blinds {state.smallBlind} / {state.bigBlind} · Buy-in {formatChips(state.buyIn)} ·{' '}
               {state.seats.length} / {state.maxPlayers} seated
+              {state.isPrivate && ` · ${state.whitelist?.length ?? 0} invited`}
               {inHand && ` · Hand #${state.handNumber}`}
               {!table.connected && <span className="text-red-400"> · reconnecting…</span>}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {state.isPrivate && (
+            <span className="flex items-center gap-1.5 rounded-full border border-ens-400/30 bg-ens-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ens-300">
+              🔒 Private
+            </span>
+          )}
           <span
             className={cn(
               'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]',
@@ -189,6 +195,40 @@ function TableInner() {
       {table.error && (
         <div className="mb-3 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-2 text-sm text-red-300">
           {table.error}
+        </div>
+      )}
+
+      {/* Private table, and you're not on the guest list → spectate only */}
+      {state.isPrivate && !state.canSit && state.yourSeat === null && (
+        <div className="mb-3 rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2.5 text-sm text-gold-200">
+          🔒 This is a private table — only ENS names on the host’s guest list can take a seat.
+          You’re welcome to watch.
+        </div>
+      )}
+
+      {/* Guest list, shown while the private table fills up */}
+      {state.isPrivate && !!state.whitelist?.length && !inHand && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+          <span className="mr-1 font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Guest list:
+          </span>
+          {state.whitelist.map((g) => {
+            const seated = state.seats.some((s) => s.address === g.address);
+            return (
+              <span
+                key={g.address}
+                className={cn(
+                  'rounded-full border px-2.5 py-1 font-mono text-[11px]',
+                  seated
+                    ? 'border-green-400/30 bg-green-400/10 text-green-400'
+                    : 'border-white/10 text-slate-400',
+                )}
+              >
+                {displayName(g.ensName, g.address)}
+                {seated && ' ✓'}
+              </span>
+            );
+          })}
         </div>
       )}
 

@@ -2,8 +2,11 @@
  * ENS Hold'em — Cloudflare Worker entry point.
  *
  * Routes:
- *   GET  /tables                 list open tables (lobby)
- *   POST /tables                 create a table (auth) { name, smallBlind }
+ *   GET  /tables                 list open tables (lobby — public tables only)
+ *   POST /tables                 create a table (auth)
+ *                                { name, smallBlind, isPrivate?, maxPlayers?, whitelist? }
+ *                                Private tables are unlisted (share the link) and
+ *                                only whitelisted addresses may sit.
  *   GET  /table/:id/state        read-only snapshot
  *   GET  /table/:id/ws           WebSocket upgrade (auth via query params)
  *   GET  /leaderboard            top players by net profit
@@ -15,6 +18,7 @@
  */
 import type { Env } from './env';
 import { verifyAuth } from './auth';
+import { MAX_PLAYERS, WhitelistEntry } from './poker/types';
 
 export { TableDO } from './table';
 
@@ -69,22 +73,51 @@ export default {
         const address = await requireAuth(request, url);
         if (!address) return json({ error: 'unauthorized' }, 401);
 
-        const body = (await request.json().catch(() => ({}))) as { name?: string; smallBlind?: number };
+        const body = (await request.json().catch(() => ({}))) as {
+          name?: string;
+          smallBlind?: number;
+          isPrivate?: boolean;
+          maxPlayers?: number;
+          whitelist?: { address?: string; ensName?: string | null }[];
+        };
         const name = String(body.name ?? '').slice(0, 40).trim() || 'ENS Hold’em Table';
         const smallBlind = [5, 10, 25, 50].includes(Number(body.smallBlind)) ? Number(body.smallBlind) : 10;
 
+        const isPrivate = body.isPrivate === true;
+        const maxPlayers = isPrivate && Number.isInteger(Number(body.maxPlayers))
+          ? Math.min(MAX_PLAYERS, Math.max(2, Number(body.maxPlayers)))
+          : MAX_PLAYERS;
+
+        // Sanitize the guest list: valid lowercase addresses, deduped, capped.
+        // The creator is always on their own list.
+        const whitelist: WhitelistEntry[] = [];
+        if (isPrivate) {
+          for (const raw of (Array.isArray(body.whitelist) ? body.whitelist : []).slice(0, 24)) {
+            const addr = String(raw?.address ?? '').toLowerCase();
+            if (!/^0x[0-9a-f]{40}$/.test(addr)) continue;
+            if (whitelist.some((w) => w.address === addr)) continue;
+            whitelist.push({ address: addr, ensName: String(raw?.ensName ?? '').slice(0, 80) || null });
+          }
+          if (!whitelist.some((w) => w.address === address)) {
+            whitelist.unshift({ address, ensName: null });
+          }
+        }
+
         const id = crypto.randomUUID().slice(0, 8);
-        await env.DB.prepare(
-          'INSERT INTO tables (id, name, small_blind, seats, status, created_at) VALUES (?, ?, ?, 0, ?, ?)',
-        ).bind(id, name, smallBlind, 'waiting', Date.now()).run();
+        // Private tables never enter the lobby registry — join via link only.
+        if (!isPrivate) {
+          await env.DB.prepare(
+            'INSERT INTO tables (id, name, small_blind, seats, status, created_at) VALUES (?, ?, ?, 0, ?, ?)',
+          ).bind(id, name, smallBlind, 'waiting', Date.now()).run();
+        }
 
         // Initialize the Durable Object with its config.
         const stub = env.TABLES.get(env.TABLES.idFromName(id));
         await stub.fetch('https://do/init', {
           method: 'POST',
-          body: JSON.stringify({ id, name, smallBlind }),
+          body: JSON.stringify({ id, name, smallBlind, isPrivate, maxPlayers, whitelist }),
         });
-        return json({ id, name, smallBlind });
+        return json({ id, name, smallBlind, isPrivate });
       }
 
       /* ---------------- Table (Durable Object) ---------------- */

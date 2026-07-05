@@ -86,6 +86,27 @@ export function Header() {
           <Button size="sm" variant="gold" onClick={() => open()}>Connect Wallet</Button>
         )}
       </div>
+
+      {/* Mobile nav — the desktop links are hidden below md */}
+      <nav className="flex items-center gap-1.5 overflow-x-auto px-4 pb-2.5 md:hidden">
+        {NAV.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-colors',
+                active
+                  ? 'border-gold-500/40 bg-gold-500/10 text-gold-200'
+                  : 'border-white/10 text-slate-400 hover:text-gold-200',
+              )}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
     </header>
   );
 }

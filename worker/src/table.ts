@@ -9,7 +9,7 @@
  */
 import {
   Card, Stage, ClientMessage, ServerMessage, TableView, SeatView,
-  ChatMessage, HandResultShare,
+  ChatMessage, HandResultShare, WhitelistEntry,
   MIN_PLAYERS, MAX_PLAYERS, ACTION_SECONDS, INTERHAND_MS, BUYIN_BB,
 } from './poker/types';
 import { freshDeck, shuffle } from './poker/deck';
@@ -50,6 +50,12 @@ interface TableConfig {
   id: string;
   name: string;
   smallBlind: number;
+  /** Private = unlisted + whitelist-only seating. Absent on legacy tables. */
+  isPrivate?: boolean;
+  /** Creator-chosen table size (2–9). Absent on legacy tables → MAX_PLAYERS. */
+  maxPlayers?: number;
+  /** Invited players (private tables only). Always includes the creator. */
+  whitelist?: WhitelistEntry[];
 }
 
 export class TableDO implements DurableObject {
@@ -218,10 +224,32 @@ export class TableDO implements DurableObject {
 
   private get bigBlind() { return this.config!.smallBlind * 2; }
   private get buyIn() { return this.bigBlind * BUYIN_BB; }
+  /** Seats at this table (creator-chosen on private tables). */
+  private get maxSeats() { return this.config?.maxPlayers ?? MAX_PLAYERS; }
+  /**
+   * Players needed for a hand. Public tables keep the 4-player product
+   * rule; private tables start once the (smaller) table fills up to its
+   * size — down to heads-up for a 2-seat game between friends.
+   */
+  private get minToStart() {
+    return this.config?.isPrivate ? Math.min(MIN_PLAYERS, this.maxSeats) : MIN_PLAYERS;
+  }
+
+  /** Whitelist check — public tables admit everyone. */
+  private isAllowedToSit(address: string): boolean {
+    if (!this.config?.isPrivate) return true;
+    return (this.config.whitelist ?? []).some((w) => w.address === address);
+  }
 
   private async handleSit(ws: WebSocket, session: Session, seat: number) {
-    if (!Number.isInteger(seat) || seat < 0 || seat >= MAX_PLAYERS) {
+    if (!Number.isInteger(seat) || seat < 0 || seat >= this.maxSeats) {
       return this.send(ws, { type: 'error', error: 'invalid seat' });
+    }
+    if (!this.isAllowedToSit(session.address)) {
+      return this.send(ws, {
+        type: 'error',
+        error: 'This is a private table — only players on the guest list can sit.',
+      });
     }
     if (this.players.has(session.address)) {
       return this.send(ws, { type: 'error', error: 'already seated' });
@@ -229,7 +257,7 @@ export class TableDO implements DurableObject {
     if ([...this.players.values()].some((p) => p.seat === seat)) {
       return this.send(ws, { type: 'error', error: 'seat taken' });
     }
-    if (this.players.size >= MAX_PLAYERS) {
+    if (this.players.size >= this.maxSeats) {
       return this.send(ws, { type: 'error', error: 'table full' });
     }
 
@@ -323,7 +351,8 @@ export class TableDO implements DurableObject {
 
   /** Keep the lobby's seat count fresh for the table list. */
   private async syncLobbyCount() {
-    if (!this.config) return;
+    // Private tables are unlisted — never (re-)register them in the lobby.
+    if (!this.config || this.config.isPrivate) return;
     // Upsert (not update) so a table swept from the lobby while momentarily
     // empty re-registers itself if players come back before the alarm fires.
     await this.env.DB.prepare(
@@ -347,8 +376,9 @@ export class TableDO implements DurableObject {
   private maybeStartHand() {
     if (this.stage !== 'waiting' || this.nextHandTimer) return;
     const ready = this.seatedPlayers().filter((p) => p.stack > 0);
-    // PRODUCT RULE: a hand only starts with 4+ seated players.
-    if (ready.length < MIN_PLAYERS) return;
+    // PRODUCT RULE: public hands only start with 4+ seated players.
+    // Private tables start once their (possibly smaller) size is met.
+    if (ready.length < this.minToStart) return;
     this.nextHandTimer = setTimeout(() => {
       this.nextHandTimer = null;
       this.startHand();
@@ -357,7 +387,7 @@ export class TableDO implements DurableObject {
 
   private startHand() {
     const ready = this.seatedPlayers().filter((p) => p.stack > 0);
-    if (ready.length < MIN_PLAYERS || this.stage !== 'waiting') {
+    if (ready.length < this.minToStart || this.stage !== 'waiting') {
       this.broadcast();
       return;
     }
@@ -744,8 +774,8 @@ export class TableDO implements DurableObject {
       smallBlind: cfg.smallBlind,
       bigBlind: this.bigBlind,
       buyIn: this.buyIn,
-      minPlayers: MIN_PLAYERS,
-      maxPlayers: MAX_PLAYERS,
+      minPlayers: this.minToStart,
+      maxPlayers: this.maxSeats,
       stage: this.stage,
       handNumber: this.handNumber,
       community: this.community,
@@ -756,7 +786,10 @@ export class TableDO implements DurableObject {
       holeCards: me?.inHand ? me.holeCards : [],
       yourSeat: me ? me.seat : null,
       actionDeadline: this.actionDeadline,
-      waitingFor: this.stage === 'waiting' ? Math.max(0, MIN_PLAYERS - readyCount) : 0,
+      waitingFor: this.stage === 'waiting' ? Math.max(0, this.minToStart - readyCount) : 0,
+      isPrivate: !!cfg.isPrivate,
+      canSit: forAddress ? this.isAllowedToSit(forAddress) : !cfg.isPrivate,
+      whitelist: cfg.isPrivate ? cfg.whitelist : undefined,
     };
   }
 

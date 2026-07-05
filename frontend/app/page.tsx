@@ -9,11 +9,16 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSignMessage } from 'wagmi';
+import { getEnsAddress } from '@wagmi/core';
+import { isAddress } from 'viem';
+import { normalize } from 'viem/ens';
 import { useAppKit } from '@reown/appkit/react';
 import { api } from '@/lib/api';
 import { ensureAuth } from '@/lib/auth';
 import { useEnsIdentity } from '@/lib/ens';
-import { formatChips, cn } from '@/lib/utils';
+import { wagmiConfig } from '@/lib/appkit';
+import type { WhitelistEntry } from '@/lib/types';
+import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoldingsBanner } from '@/components/HoldingsBanner';
@@ -60,6 +65,13 @@ export default function HomePage() {
   const [tableName, setTableName] = useState('');
   const [smallBlind, setSmallBlind] = useState(10);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Private-table options: creator-chosen size + ENS guest list.
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState(6);
+  const [guestInput, setGuestInput] = useState('');
+  const [guests, setGuests] = useState<WhitelistEntry[]>([]);
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [resolvingGuest, setResolvingGuest] = useState(false);
   // Stable random starting suggestion, cycled by the dice button.
   const startIdea = useMemo(() => Math.floor(Math.random() * TABLE_NAME_IDEAS.length), []);
   const [ideaIdx, setIdeaIdx] = useState(startIdea);
@@ -75,13 +87,57 @@ export default function HomePage() {
     document.getElementById('lobby-tables')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  /** Resolve an ENS name (or accept a raw 0x address) onto the guest list. */
+  const addGuest = async () => {
+    const input = guestInput.trim().toLowerCase();
+    if (!input) return;
+    setGuestError(null);
+    setResolvingGuest(true);
+    try {
+      let entry: WhitelistEntry;
+      if (isAddress(input)) {
+        entry = { address: input, ensName: null };
+      } else {
+        const name = input.includes('.') ? input : `${input}.eth`;
+        const resolved = await getEnsAddress(wagmiConfig, { name: normalize(name), chainId: 1 });
+        if (!resolved) throw new Error(`Couldn’t resolve “${name}” — check the spelling.`);
+        entry = { address: resolved.toLowerCase(), ensName: name };
+      }
+      if (entry.address === address?.toLowerCase()) {
+        throw new Error('You’re the host — you’re already on the list.');
+      }
+      if (guests.some((g) => g.address === entry.address)) {
+        throw new Error('Already on the guest list.');
+      }
+      setGuests((g) => [...g, entry].slice(0, 23));
+      setGuestInput('');
+    } catch (err) {
+      setGuestError(err instanceof Error ? err.message : 'Could not resolve that name');
+    } finally {
+      setResolvingGuest(false);
+    }
+  };
+
   const createTable = async () => {
     if (!address) return open();
+    if (isPrivate && guests.length === 0) {
+      setCreateError('Add at least one frEN to the guest list (or make the table public).');
+      return;
+    }
     setCreating(true);
     setCreateError(null);
     try {
       const sig = await ensureAuth(address, signMessageAsync);
-      const { id } = await api.createTable({ address, sig }, tableName || suggestion, smallBlind);
+      const { id } = await api.createTable(
+        { address, sig },
+        {
+          name: tableName || suggestion,
+          smallBlind,
+          isPrivate,
+          maxPlayers: isPrivate ? maxPlayers : undefined,
+          whitelist: isPrivate ? guests : undefined,
+        },
+      );
       router.push(`/table/?id=${id}`);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create table');
@@ -322,12 +378,121 @@ export default function HomePage() {
                     Buy-in: {formatChips(smallBlind * 2 * 100)} chips (100 big blinds)
                   </p>
                 </div>
+
+                {/* Public / Private visibility */}
+                <div>
+                  <label className="mb-1.5 block text-xs text-slate-500">Visibility</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: false, label: '🌐 Public', hint: 'Listed in the lobby' },
+                      { value: true, label: '🔒 Private', hint: 'Invite-only by ENS' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={String(opt.value)}
+                        onClick={() => setIsPrivate(opt.value)}
+                        className={cn(
+                          'rounded-[10px] border px-2 py-2.5 text-center transition-colors',
+                          isPrivate === opt.value
+                            ? 'border-gold-500/60 bg-gold-500/15 text-gold-200'
+                            : 'border-white/10 bg-night-900 text-slate-400 hover:border-white/25',
+                        )}
+                      >
+                        <span className="block text-sm font-medium">{opt.label}</span>
+                        <span className="mt-0.5 block text-[10.5px] text-slate-500">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {isPrivate && (
+                  <>
+                    {/* Table size */}
+                    <div>
+                      <label className="mb-1.5 block text-xs text-slate-500">Players (table size)</label>
+                      <div className="grid grid-cols-8 gap-1.5">
+                        {[2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setMaxPlayers(n)}
+                            className={cn(
+                              'rounded-[9px] border py-2 font-mono text-sm transition-colors',
+                              maxPlayers === n
+                                ? 'border-gold-500/60 bg-gold-500/15 text-gold-200'
+                                : 'border-white/10 bg-night-900 text-slate-400 hover:border-white/25',
+                            )}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {maxPlayers < 4
+                          ? `Hands start as soon as all ${maxPlayers} players are seated.`
+                          : 'Hands start at 4 seated players.'}
+                      </p>
+                    </div>
+
+                    {/* ENS guest list */}
+                    <div>
+                      <label className="mb-1.5 block text-xs text-slate-500">
+                        Guest list (ENS names) — only these wallets can sit
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          value={guestInput}
+                          onChange={(e) => { setGuestInput(e.target.value); setGuestError(null); }}
+                          onKeyDown={(e) => e.key === 'Enter' && !resolvingGuest && addGuest()}
+                          placeholder="vitalik.eth or 0x…"
+                          className="min-w-0 flex-1 rounded-[10px] border border-white/10 bg-night-900 px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-slate-600 focus:border-gold-500/60"
+                        />
+                        <button
+                          onClick={addGuest}
+                          disabled={resolvingGuest || !guestInput.trim()}
+                          className="shrink-0 rounded-[10px] border border-gold-500/40 px-4 text-sm text-gold-200 transition-colors hover:bg-gold-500/10 disabled:opacity-40"
+                        >
+                          {resolvingGuest ? '…' : 'Add'}
+                        </button>
+                      </div>
+                      {guestError && <p className="mt-2 text-xs text-red-400">{guestError}</p>}
+                      {guests.length > 0 && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {guests.map((g) => (
+                            <span
+                              key={g.address}
+                              className="flex items-center gap-1.5 rounded-full border border-ens-400/30 bg-ens-400/10 py-1 pl-2.5 pr-1.5 text-[11.5px] text-ens-300"
+                            >
+                              {displayName(g.ensName, g.address)}
+                              <button
+                                onClick={() => setGuests((list) => list.filter((x) => x.address !== g.address))}
+                                className="flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                                aria-label={`Remove ${displayName(g.ensName, g.address)}`}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-2 text-xs text-slate-600">
+                        You’re on the list automatically. Private tables never appear in the
+                        lobby — share the table link with your frENS.
+                      </p>
+                    </div>
+                  </>
+                )}
+
                 {createError && <p className="text-xs text-red-400">{createError}</p>}
                 <Button className="w-full" onClick={createTable} disabled={creating}>
-                  {creating ? 'Creating…' : isConnected ? 'Create Table' : 'Connect to Create'}
+                  {creating
+                    ? 'Creating…'
+                    : isConnected
+                      ? isPrivate ? 'Create Private Table' : 'Create Table'
+                      : 'Connect to Create'}
                 </Button>
                 <p className="text-center text-xs text-slate-600">
-                  Share the table link to invite friends — hands start at 4 players.
+                  {isPrivate
+                    ? 'Only whitelisted ENS names can take a seat.'
+                    : 'Share the table link to invite friends — hands start at 4 players.'}
                 </p>
               </CardContent>
             </Card>

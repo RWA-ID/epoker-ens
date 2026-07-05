@@ -1,7 +1,16 @@
 'use client';
 /** Typed fetch helpers for the Cloudflare Worker lobby API. */
 import { WORKER_URL } from './config';
-import type { LobbyTable, LeaderboardRow, PlayerProfile } from './types';
+import type { LobbyTable, LeaderboardRow, PlayerProfile, WhitelistEntry } from './types';
+
+export interface CreateTableOptions {
+  name: string;
+  smallBlind: number;
+  /** Private = unlisted, whitelist-only seating, creator-chosen size. */
+  isPrivate?: boolean;
+  maxPlayers?: number;
+  whitelist?: WhitelistEntry[];
+}
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${WORKER_URL}${path}`);
@@ -26,8 +35,8 @@ async function post<T>(path: string, auth: { address: string; sig: string }, bod
 
 export const api = {
   listTables: () => get<{ tables: LobbyTable[] }>('/tables'),
-  createTable: (auth: { address: string; sig: string }, name: string, smallBlind: number) =>
-    post<{ id: string }>('/tables', auth, { name, smallBlind }),
+  createTable: (auth: { address: string; sig: string }, options: CreateTableOptions) =>
+    post<{ id: string }>('/tables', auth, options),
   leaderboard: () => get<{ leaderboard: LeaderboardRow[] }>('/leaderboard'),
   profile: (address: string) => get<{ profile: PlayerProfile | null }>(`/profile/${address}`),
   claim: (auth: { address: string; sig: string }) =>

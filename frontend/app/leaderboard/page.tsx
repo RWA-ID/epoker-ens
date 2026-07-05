@@ -20,22 +20,33 @@ export default function LeaderboardPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-14 sm:px-7">
-      <div className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-500">
-            All-time standings
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-500">
+          All-time standings
+        </p>
+        <h1 className="mt-2.5 font-display text-4xl font-bold text-cream sm:text-[46px]">
+          Leaderboard
+        </h1>
+        <p className="mt-3 max-w-md text-[15px] text-slate-400">
+          Top players by lifetime net chips won across every table on epoker.eth.
+        </p>
+      </div>
+
+      {/* High Roller room banner */}
+      <div className="relative mt-8 h-40 overflow-hidden rounded-2xl border border-gold-500/30 shadow-[0_18px_50px_rgba(0,0,0,0.45)] sm:h-56">
+        <div
+          className="absolute inset-0 bg-cover"
+          style={{ backgroundImage: "url('/poker-bg.jpg')", backgroundPosition: 'center 32%' }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-night-950/90 via-night-950/25 to-transparent" />
+        <div className="absolute bottom-4 left-5 sm:bottom-5 sm:left-7">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-gold-400">
+            epoker.eth
           </p>
-          <h1 className="mt-2.5 font-display text-4xl font-bold text-cream sm:text-[46px]">
-            Leaderboard
-          </h1>
-          <p className="mt-3 max-w-md text-[15px] text-slate-400">
-            Top players by lifetime net chips won across every table on epoker.eth.
+          <p className="mt-1 font-display text-xl font-semibold text-cream sm:text-2xl">
+            The ENS High Roller Table
           </p>
         </div>
-        <div
-          className="hidden h-20 w-[120px] rounded-xl border border-gold-500/30 bg-cover bg-center sm:block"
-          style={{ backgroundImage: "url('/poker-bg.jpg')" }}
-        />
       </div>
 
       {isLoading && <p className="py-16 text-center text-sm text-slate-500">Dealing…</p>}

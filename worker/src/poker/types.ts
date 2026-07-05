@@ -56,6 +56,18 @@ export interface TableView {
   actionDeadline: number | null;
   /** How many more players are needed before a hand can start. */
   waitingFor: number;
+  /** Private tables are unlisted and only whitelisted players may sit. */
+  isPrivate: boolean;
+  /** Whether YOU are allowed to take a seat (always true on public tables). */
+  canSit: boolean;
+  /** Guest list — only present on private tables. */
+  whitelist?: WhitelistEntry[];
+}
+
+/** One invited player on a private table's guest list. */
+export interface WhitelistEntry {
+  address: string; // lowercase 0x…
+  ensName: string | null;
 }
 
 export interface HandResultShare {

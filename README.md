@@ -26,7 +26,11 @@ Built by [@ensgianteth](https://x.com/ensgianteth) · Live backend:
   badge.
 - **Lobby & tables** — create/join tables (blinds 5/10 to 50/100, buy-in 100
   BB), shareable invite links, max 9 seats, **hard 4-player minimum** to start
-  a hand.
+  a hand on public tables.
+- **Private tables** — pick the table size (2–9 seats) and whitelist your
+  frENS by ENS name (or address). Private tables never appear in the lobby
+  (invite by link), only whitelisted wallets can sit, and hands start as soon
+  as the (smaller) table fills — down to heads-up.
 - **Full Texas Hold'em** — 4 betting rounds, side pots, min-raise rules
   (including short all-in no-reopen), CSPRNG shuffle, 30s action timers with
   auto-check/fold, in-table chat, synthesized sound effects (toggleable).
