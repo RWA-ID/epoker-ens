@@ -12,7 +12,9 @@ export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin';
 export interface SeatView {
   seat: number;
   address: string;
-  ensName: string | null;
+  /** Display name: a hoodfi.eth subname, a mainnet ENS name, or null. */
+  handle: string | null;
+  /** Raw `avatar` text record — NOT a resolved URL. See lib/avatar.ts. */
   avatar: string | null;
   stack: number;
   bet: number;
@@ -54,13 +56,13 @@ export interface TableView {
 /** One invited player on a private table's guest list. */
 export interface WhitelistEntry {
   address: string; // lowercase 0x…
-  ensName: string | null;
+  handle: string | null;
 }
 
 export interface HandResultShare {
   seat: number;
   address: string;
-  ensName: string | null;
+  handle: string | null;
   amount: number;
   handName: string | null;
   cards?: Card[];
@@ -68,7 +70,7 @@ export interface HandResultShare {
 
 export interface ChatMessage {
   address: string;
-  ensName: string | null;
+  handle: string | null;
   text: string;
   ts: number;
 }
@@ -98,7 +100,8 @@ export interface LobbyTable {
 
 export interface PlayerProfile {
   address: string;
-  ensName: string | null;
+  handle: string | null;
+  avatar: string | null;
   bankroll: number;
   netProfit: number;
   handsPlayed: number;
@@ -109,7 +112,8 @@ export interface PlayerProfile {
 
 export interface LeaderboardRow {
   address: string;
-  ensName: string | null;
+  handle: string | null;
+  avatar: string | null;
   netProfit: number;
   handsPlayed: number;
   handsWon: number;

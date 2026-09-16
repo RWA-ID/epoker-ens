@@ -1,23 +1,21 @@
 'use client';
-/** shadcn-style button with ENS Hold'em "High Roller" variants. */
+/** HoodPoker button — uppercase italic label, accent fill or hairline outline. */
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 const VARIANTS = {
-  // Gold gradient is the primary CTA treatment across the redesign.
-  gold: 'gold-fill text-ink font-semibold shadow-gold hover:-translate-y-0.5 hover:shadow-goldlg',
-  primary: 'bg-ens-500 hover:bg-ens-400 text-white shadow-glow',
+  acid: 'bg-acid text-ink hover:bg-acid-hover',
   outline:
-    'border border-gold-500/40 text-gold-200 hover:bg-gold-500/10 hover:border-gold-500/70',
-  ghost: 'text-slate-400 hover:text-slate-100 hover:bg-white/5',
-  neutral: 'border border-white/15 bg-white/5 text-slate-300 hover:bg-white/10',
+    'border border-cream/[0.22] bg-cream/[0.05] text-cream hover:border-acid hover:text-acid',
+  ghost: 'text-dim hover:text-acid',
+  neutral: 'border border-cream/[0.16] bg-transparent text-dim hover:border-acid hover:text-acid',
   danger: 'border border-red-400/30 bg-red-400/10 text-red-300 hover:bg-red-400/20',
 } as const;
 
 const SIZES = {
-  sm: 'h-9 px-4 text-[13px] rounded-[9px]',
-  md: 'h-11 px-5 text-sm rounded-[11px]',
-  lg: 'h-[52px] px-7 text-[15px] rounded-xl',
+  sm: 'px-[13px] py-[9px] text-[11px] rounded-btn tracking-[0.1em]',
+  md: 'px-[18px] py-[11px] text-[13px] rounded-btn tracking-[0.04em]',
+  lg: 'px-[28px] py-[16px] text-[16px] rounded-cta tracking-[0.03em]',
 } as const;
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -26,11 +24,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'gold', size = 'md', ...props }, ref) => (
+  ({ className, variant = 'acid', size = 'md', ...props }, ref) => (
     <button
       ref={ref}
       className={cn(
-        'inline-flex items-center justify-center gap-2 font-medium transition-all duration-200',
+        // `whitespace-nowrap` matters: the CTA band's two buttons wrap their
+        // labels onto two lines at narrow widths without it.
+        'hp-display hp-w85 inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors duration-150',
         'disabled:pointer-events-none disabled:opacity-40',
         VARIANTS[variant],
         SIZES[size],

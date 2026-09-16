@@ -8,14 +8,28 @@
  */
 
 export function signInMessage(address: string): string {
-  return `Sign in to epoker.eth\n\nWallet: ${address.toLowerCase()}\n\nThis signature only proves wallet ownership. It costs no gas and grants no token approvals.`;
+  return `Sign in to Hoodpoker\n\nWallet: ${address.toLowerCase()}\n\nThis signature only proves wallet ownership. It costs no gas, moves no funds, and grants no token approvals.`;
 }
 
 const KEY = (address: string) => `epoker:sig:${address.toLowerCase()}`;
 
 export function cachedSignature(address: string): string | null {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem(KEY(address));
+  try {
+    return sessionStorage.getItem(KEY(address));
+  } catch {
+    return null;
+  }
+}
+
+/** Forget one wallet's cached sign-in (used on disconnect). */
+export function clearSignature(address: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(KEY(address));
+  } catch {
+    /* nothing cached */
+  }
 }
 
 /**
@@ -29,6 +43,10 @@ export async function ensureAuth(
   const cached = cachedSignature(address);
   if (cached) return cached;
   const signature = await sign({ message: signInMessage(address) });
-  sessionStorage.setItem(KEY(address), signature);
+  try {
+    sessionStorage.setItem(KEY(address), signature);
+  } catch {
+    /* private mode — they'll re-sign next load */
+  }
   return signature;
 }

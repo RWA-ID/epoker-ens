@@ -7,33 +7,81 @@
 }
 
 ::selection {
-  background: rgba(201, 162, 78, 0.3);
+  background: rgba(204, 255, 0, 0.3);
+  color: #f2f2f0;
 }
 
 body {
-  @apply bg-night-950 text-slate-200 antialiased;
-  background-image: radial-gradient(120% 80% at 50% -10%, #0f1119 0%, #08090d 55%, #06070a 100%);
-  background-attachment: fixed;
+  @apply bg-night-950 text-cream antialiased;
 }
 
-/* Gold gradient text — the brand treatment for headlines & numerals. */
-.gold-text {
-  background: linear-gradient(180deg, #f4e4b8, #c9a24e);
-  -webkit-background-clip: text;
-  background-clip: text;
+a:hover {
+  color: #e6ff66;
+}
+
+/**
+ * The signature display treatment: uppercase italic Archivo, heavily
+ * condensed. `font-stretch` only does anything because the variable font is
+ * loaded with the `62..125` width axis — see app/layout.tsx.
+ */
+.hp-display {
+  font-family: var(--font-display), Archivo, system-ui, sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hp-h1 {
+  font-size: clamp(58px, 12vw, 148px);
+  font-stretch: 72%;
+  letter-spacing: -0.035em;
+  line-height: 0.84;
+  word-spacing: 0.08em;
+  text-wrap: balance;
+}
+
+.hp-h2 {
+  font-size: clamp(38px, 6vw, 68px);
+  font-stretch: 74%;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+
+.hp-h2-cta {
+  font-size: clamp(38px, 7vw, 84px);
+  font-stretch: 72%;
+  letter-spacing: -0.035em;
+  line-height: 0.86;
+}
+
+/* Outlined headline half — paired with .hp-fill below it. */
+.hp-outline {
   color: transparent;
+  -webkit-text-stroke: 2px #ccff00;
 }
 
-/* Gold gradient fill — primary CTA surfaces. */
-.gold-fill {
-  background: linear-gradient(180deg, #f4e4b8, #c9a24e);
+.hp-fill {
+  color: #ccff00;
+  text-shadow: 0 0 44px rgba(204, 255, 0, 0.4);
 }
 
-/* Subtle gold divider used across panels */
-.gold-rule {
-  background: linear-gradient(90deg, transparent, rgba(201, 162, 78, 0.6), transparent);
-  height: 1px;
+.hp-w80 { font-stretch: 80%; }
+.hp-w85 { font-stretch: 85%; }
+
+body { text-wrap: pretty; }
+
+/* Respect a reduced-motion preference: the ticker and the hero rise are
+   decorative, and a 26s infinite translate is exactly what this setting is
+   for. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-pulse,
+  .animate-rise,
+  .animate-dealIn {
+    animation: none !important;
+  }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { @apply bg-night-800 rounded; }
+::-webkit-scrollbar-thumb:hover { background: rgba(204, 255, 0, 0.25); }

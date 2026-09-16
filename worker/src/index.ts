@@ -1,5 +1,5 @@
 /**
- * ENS Hold'em — Cloudflare Worker entry point.
+ * Hoodpoker — Cloudflare Worker entry point.
  *
  * Routes:
  *   GET  /tables                 list open tables (lobby — public tables only)
@@ -9,11 +9,12 @@
  *                                only whitelisted addresses may sit.
  *   GET  /table/:id/state        read-only snapshot
  *   GET  /table/:id/ws           WebSocket upgrade (auth via query params)
- *   GET  /leaderboard            top players by net profit
+ *   GET  /leaderboard            top players by net play chips
  *   GET  /profile/:address       one player's stats + bankroll
  *   POST /claim                  daily free chips (auth)
  *
  * Auth = wallet signature over a static message (see src/auth.ts).
+ * Play chips only: nothing here mints, transfers or redeems value.
  * Each table is a Durable Object (src/table.ts) that owns all game state.
  */
 import type { Env } from './env';
@@ -78,9 +79,9 @@ export default {
           smallBlind?: number;
           isPrivate?: boolean;
           maxPlayers?: number;
-          whitelist?: { address?: string; ensName?: string | null }[];
+          whitelist?: { address?: string; handle?: string | null }[];
         };
-        const name = String(body.name ?? '').slice(0, 40).trim() || 'ENS Hold’em Table';
+        const name = String(body.name ?? '').slice(0, 40).trim() || 'Hoodpoker Table';
         const smallBlind = [5, 10, 25, 50].includes(Number(body.smallBlind)) ? Number(body.smallBlind) : 10;
 
         const isPrivate = body.isPrivate === true;
@@ -96,10 +97,10 @@ export default {
             const addr = String(raw?.address ?? '').toLowerCase();
             if (!/^0x[0-9a-f]{40}$/.test(addr)) continue;
             if (whitelist.some((w) => w.address === addr)) continue;
-            whitelist.push({ address: addr, ensName: String(raw?.ensName ?? '').slice(0, 80) || null });
+            whitelist.push({ address: addr, handle: String(raw?.handle ?? '').slice(0, 80) || null });
           }
           if (!whitelist.some((w) => w.address === address)) {
-            whitelist.unshift({ address, ensName: null });
+            whitelist.unshift({ address, handle: null });
           }
         }
 
@@ -138,7 +139,7 @@ export default {
 
       if (path === '/leaderboard' && request.method === 'GET') {
         const { results } = await env.DB.prepare(
-          `SELECT address, ens_name AS ensName, net_profit AS netProfit,
+          `SELECT address, handle, avatar, net_profit AS netProfit,
                   hands_played AS handsPlayed, hands_won AS handsWon, biggest_pot AS biggestPot
            FROM players WHERE hands_played > 0
            ORDER BY net_profit DESC LIMIT 100`,
@@ -149,7 +150,7 @@ export default {
       const profileMatch = path.match(/^\/profile\/(0x[0-9a-fA-F]{40})$/);
       if (profileMatch && request.method === 'GET') {
         const row = await env.DB.prepare(
-          `SELECT address, ens_name AS ensName, bankroll, net_profit AS netProfit,
+          `SELECT address, handle, avatar, bankroll, net_profit AS netProfit,
                   hands_played AS handsPlayed, hands_won AS handsWon,
                   biggest_pot AS biggestPot, last_claim AS lastClaim
            FROM players WHERE address = ?`,
@@ -168,18 +169,6 @@ export default {
            ON CONFLICT(address) DO NOTHING`,
         ).bind(address, Date.now()).run();
 
-        // ---------------------------------------------------------------
-        // FUTURE ENS INTEGRATION POINT ------------------------------------
-        // When the official ENS token distribution/reward contract ships,
-        // this is where holding verification plugs in:
-        //   1. Read the caller's $ENS balance + delegation on-chain
-        //      (viem createPublicClient + Alchemy RPC, or a signed proof).
-        //   2. Scale DAILY_CHIPS by holding tier (e.g. +25% for delegated
-        //      holders), and/or mint claimable reward points that the
-        //      distribution contract later converts to real rewards.
-        //   3. Zero-balance wallets receive the reduced base amount —
-        //      mirroring the client-side "sold all ENS" penalty.
-        // ---------------------------------------------------------------
         const now = Date.now();
         const res = await env.DB.prepare(
           `UPDATE players SET bankroll = bankroll + ?, last_claim = ?

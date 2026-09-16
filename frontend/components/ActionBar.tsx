@@ -41,7 +41,7 @@ export function ActionBar({
   return (
     <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-night-850/95 p-3.5 shadow-2xl backdrop-blur">
       {!isMyTurn ? (
-        <p className="py-2 text-center text-sm text-slate-500">
+        <p className="py-2 text-center text-sm text-dim">
           {state.stage === 'waiting' ? 'Hand starting soon…' : 'Waiting for other players…'}
         </p>
       ) : (
@@ -56,10 +56,10 @@ export function ActionBar({
                 step={state.smallBlind}
                 value={raiseTo}
                 onChange={(e) => setRaiseTo(Number(e.target.value))}
-                className="min-w-32 flex-1 accent-gold-500"
+                className="min-w-32 flex-1 accent-acid-400"
                 aria-label="Raise amount"
               />
-              <span className="w-20 text-right font-mono text-sm tabular-nums text-gold-300 sm:w-24">
+              <span className="w-20 text-right font-mono text-sm tabular-nums text-acid sm:w-24">
                 {formatChips(Math.min(raiseTo, maxTo))}
               </span>
               <div className="hidden gap-1 sm:flex">

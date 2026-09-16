@@ -29,12 +29,12 @@ export function PlayingCard({
       <div
         className={cn(
           dims,
-          'animate-dealIn border border-gold-500/30 bg-gradient-to-br from-[#17376f] to-[#0a1a3e]',
+          'animate-dealIn border border-acid-400/30 bg-gradient-to-br from-[#17376f] to-[#0a1a3e]',
           'flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.55)]',
           className,
         )}
       >
-        <span className="text-[0.9em] text-gold-500/40">♠</span>
+        <span className="text-[0.9em] text-acid-400/40">♠</span>
       </div>
     );
   }

@@ -19,44 +19,25 @@ export default function LeaderboardPage() {
   const listRows = hasPodium ? rows.slice(3) : rows;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-14 sm:px-7">
+    <div className="mx-auto max-w-shell px-[22px] pb-[88px] pt-[74px]">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-500">
-          All-time standings
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.24em] text-acid">
+          03 — Season ranks
         </p>
-        <h1 className="mt-2.5 font-display text-4xl font-bold text-cream sm:text-[46px]">
-          Leaderboard
-        </h1>
-        <p className="mt-3 max-w-md text-[15px] text-slate-400">
-          Top players by lifetime net chips won across every table on epoker.eth.
+        <h1 className="hp-display hp-h2 mt-3 text-cream">Leaderboard</h1>
+        <p className="mt-4 max-w-[520px] text-[16px] leading-[1.6] text-muted">
+          Every hand you win moves the board. Chips are virtual, bragging rights are not.
         </p>
       </div>
 
-      {/* High Roller room banner */}
-      <div className="relative mt-8 h-40 overflow-hidden rounded-2xl border border-gold-500/30 shadow-[0_18px_50px_rgba(0,0,0,0.45)] sm:h-56">
-        <div
-          className="absolute inset-0 bg-cover"
-          style={{ backgroundImage: "url('/poker-bg.jpg')", backgroundPosition: 'center 32%' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-night-950/90 via-night-950/25 to-transparent" />
-        <div className="absolute bottom-4 left-5 sm:bottom-5 sm:left-7">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-gold-400">
-            epoker.eth
-          </p>
-          <p className="mt-1 font-display text-xl font-semibold text-cream sm:text-2xl">
-            The ENS High Roller Table
-          </p>
-        </div>
-      </div>
-
-      {isLoading && <p className="py-16 text-center text-sm text-slate-500">Dealing…</p>}
+      {isLoading && <p className="py-16 text-center text-sm text-dim">Dealing…</p>}
       {!!error && (
         <p className="py-16 text-center text-sm text-red-400">
           Could not load the leaderboard. ({String(error)})
         </p>
       )}
       {rows.length === 0 && !isLoading && !error && (
-        <p className="py-16 text-center text-sm text-slate-500">
+        <p className="py-16 text-center text-sm text-dim">
           No hands played yet — the first pot writes history.
         </p>
       )}
@@ -78,15 +59,15 @@ export default function LeaderboardPage() {
             return (
               <div
                 key={row.address}
-                className="flex items-center gap-4 border-b border-white/5 px-5 py-4 transition-colors last:border-0 hover:bg-gold-500/[0.04]"
+                className="flex items-center gap-4 border-b border-white/5 px-5 py-4 transition-colors last:border-0 hover:bg-acid-400/[0.05]"
               >
-                <span className="w-8 text-center font-mono text-sm text-slate-500">#{rank}</span>
-                <LeaderboardAvatar ensName={row.ensName} address={row.address} />
+                <span className="w-8 text-center font-mono text-sm text-dim">#{rank}</span>
+                <LeaderboardAvatar handle={row.handle} avatar={row.avatar} address={row.address} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14.5px] font-semibold text-slate-100">
-                    {displayName(row.ensName, row.address)}
+                  <p className="truncate text-[14.5px] font-semibold text-cream">
+                    {displayName(row.handle, row.address)}
                   </p>
-                  <p className="mt-0.5 truncate font-mono text-xs text-slate-500">
+                  <p className="mt-0.5 truncate font-mono text-xs text-dim">
                     {row.handsWon}/{row.handsPlayed} hands won · biggest pot{' '}
                     {formatChips(row.biggestPot)}
                   </p>
@@ -104,20 +85,20 @@ export default function LeaderboardPage() {
 const PLACE_STYLE = {
   1: {
     medal: '🥇',
-    card: 'border-gold-500/40 bg-gradient-to-b from-[#18140c]/70 to-night-850/60',
-    ring: 'ring-gold-300/80',
+    card: 'border-acid-400/45 bg-gradient-to-b from-[#141a08]/70 to-night-850/60',
+    ring: 'ring-acid-400/80',
     offset: '',
   },
   2: {
     medal: '🥈',
     card: 'border-white/10 bg-night-850/60',
-    ring: 'ring-slate-300/50',
+    ring: 'ring-muted/50',
     offset: 'sm:mt-6',
   },
   3: {
     medal: '🥉',
     card: 'border-white/10 bg-night-850/60',
-    ring: 'ring-gold-500/50',
+    ring: 'ring-acid/60',
     offset: 'sm:mt-6',
   },
 } as const;
@@ -128,13 +109,13 @@ function PodiumCard({ row, place }: { row: LeaderboardRow; place: 1 | 2 | 3 }) {
     <div className={cn('rounded-2xl border px-4 pb-5 pt-6 text-center', s.card, s.offset)}>
       <div className="mb-2 text-[26px]">{s.medal}</div>
       <div className={cn('mx-auto w-fit rounded-full ring-2', s.ring)}>
-        <LeaderboardAvatar ensName={row.ensName} address={row.address} size="lg" />
+        <LeaderboardAvatar handle={row.handle} avatar={row.avatar} address={row.address} size="lg" />
       </div>
-      <p className="mt-3 truncate text-[14.5px] font-semibold text-slate-100">
-        {displayName(row.ensName, row.address)}
+      <p className="mt-3 truncate text-[14.5px] font-semibold text-cream">
+        {displayName(row.handle, row.address)}
       </p>
       <Net value={row.netProfit} className="mt-2 block text-base" />
-      <p className="mt-1 text-[11.5px] text-slate-500">
+      <p className="mt-1 text-[11.5px] text-dim">
         {row.handsWon}/{row.handsPlayed} hands won
       </p>
     </div>

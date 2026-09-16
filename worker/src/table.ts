@@ -16,6 +16,8 @@ import { freshDeck, shuffle } from './poker/deck';
 import { evaluate7 } from './poker/evaluator';
 import { settlePots, Contributor } from './poker/pots';
 import type { Env } from './env';
+import { sanitizeChat } from './chat';
+import { verifyHandle } from './handle';
 
 /** How long a table may sit empty before it is closed and delisted. */
 const EMPTY_TABLE_CLOSE_MS = 60_000;
@@ -23,7 +25,7 @@ const EMPTY_TABLE_CLOSE_MS = 60_000;
 interface Player {
   seat: number;
   address: string; // lowercase 0x…
-  ensName: string | null;
+  handle: string | null;
   avatar: string | null;
   stack: number;
   /** Chips committed on the current street only (display + bet math). */
@@ -42,7 +44,7 @@ interface Player {
 
 interface Session {
   address: string;
-  ensName: string | null;
+  handle: string | null;
   avatar: string | null;
 }
 
@@ -122,9 +124,18 @@ export class TableDO implements DurableObject {
       if (!/^0x[0-9a-f]{40}$/.test(address)) {
         return new Response('bad address', { status: 400 });
       }
+      // The signature proves the wallet, not the name. A hoodfi handle is
+      // checked against the registry before anyone sits down under it;
+      // an unverified claim simply falls back to the address.
+      //
+      // The result is cached in D1 so this costs one eth_call the first time a
+      // player uses a name, not one on every table join — the public Robinhood
+      // RPC throttles Workers, and a throttled read would otherwise silently
+      // demote a legitimate player to a raw address.
+      const claimed = url.searchParams.get('name');
       const session: Session = {
         address,
-        ensName: url.searchParams.get('name') || null,
+        handle: claimed ? await this.resolveHandle(address, claimed) : null,
         avatar: url.searchParams.get('avatar') || null,
       };
       const pair = new WebSocketPair();
@@ -133,6 +144,43 @@ export class TableDO implements DurableObject {
     }
 
     return new Response('not found', { status: 404 });
+  }
+
+  /**
+   * Verify a claimed handle, reusing a recent successful verification.
+   *
+   * Re-verification matters: names are transferable, so a cached pass has a
+   * TTL rather than being permanent.
+   */
+  private async resolveHandle(address: string, claimed: string): Promise<string | null> {
+    const name = claimed.trim().toLowerCase();
+    if (!name) return null;
+
+    const TTL = 6 * 3600 * 1000;
+    try {
+      const row = await this.env.DB.prepare(
+        'SELECT handle, handle_checked AS checked FROM players WHERE address = ?',
+      ).bind(address).first<{ handle: string | null; checked: number | null }>();
+
+      if (
+        row?.handle === name &&
+        typeof row.checked === 'number' &&
+        Date.now() - row.checked < TTL
+      ) {
+        return name;
+      }
+    } catch {
+      // Cache miss or pre-migration schema — fall through to the live check.
+    }
+
+    const verified = await verifyHandle(address, name);
+    if (verified) {
+      await this.env.DB.prepare(
+        `INSERT INTO players (address, handle, handle_checked, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(address) DO UPDATE SET handle = excluded.handle, handle_checked = excluded.handle_checked`,
+      ).bind(address, verified, Date.now(), Date.now()).run().catch(() => { /* best-effort */ });
+    }
+    return verified;
   }
 
   private acceptSocket(ws: WebSocket, session: Session) {
@@ -150,7 +198,7 @@ export class TableDO implements DurableObject {
     const player = this.players.get(session.address);
     if (player) {
       player.connected = true;
-      player.ensName = session.ensName ?? player.ensName;
+      player.handle = session.handle ?? player.handle;
       player.avatar = session.avatar ?? player.avatar;
     }
 
@@ -190,10 +238,13 @@ export class TableDO implements DurableObject {
       case 'action':
         return this.handleAction(ws, session.address, msg.action, msg.amount);
       case 'chat': {
-        const text = String(msg.text ?? '').slice(0, 280).trim();
+        // Open to everyone connected — seated players and spectators alike —
+        // so the server is the authority on what may be said. Plain text
+        // only: links are stripped here, not just hidden in the client.
+        const text = sanitizeChat(msg.text);
         if (!text) return;
         const message: ChatMessage = {
-          address: session.address, ensName: session.ensName, text, ts: Date.now(),
+          address: session.address, handle: session.handle, text, ts: Date.now(),
         };
         this.chatLog.push(message);
         if (this.chatLog.length > 100) this.chatLog.shift();
@@ -265,9 +316,11 @@ export class TableDO implements DurableObject {
     // New wallets are auto-provisioned with the starting bankroll.
     const db = this.env.DB;
     await db.prepare(
-      `INSERT INTO players (address, ens_name, created_at) VALUES (?, ?, ?)
-       ON CONFLICT(address) DO UPDATE SET ens_name = COALESCE(excluded.ens_name, players.ens_name)`,
-    ).bind(session.address, session.ensName, Date.now()).run();
+      `INSERT INTO players (address, handle, avatar, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(address) DO UPDATE SET
+         handle = COALESCE(excluded.handle, players.handle),
+         avatar = COALESCE(excluded.avatar, players.avatar)`,
+    ).bind(session.address, session.handle, session.avatar, Date.now()).run();
 
     const debit = await db.prepare(
       'UPDATE players SET bankroll = bankroll - ? WHERE address = ? AND bankroll >= ?',
@@ -282,7 +335,7 @@ export class TableDO implements DurableObject {
     this.players.set(session.address, {
       seat,
       address: session.address,
-      ensName: session.ensName,
+      handle: session.handle,
       avatar: session.avatar,
       stack: this.buyIn,
       streetBet: 0,
@@ -676,7 +729,7 @@ export class TableDO implements DurableObject {
       p.stack += share.amount;
       const hand = uncontested ? null : evaluate7([...p.holeCards, ...this.community]);
       winners.push({
-        seat: p.seat, address: p.address, ensName: p.ensName,
+        seat: p.seat, address: p.address, handle: p.handle,
         amount: share.amount, handName: hand?.name ?? null,
         cards: uncontested ? undefined : p.holeCards,
       });
@@ -755,7 +808,7 @@ export class TableDO implements DurableObject {
     const seats: SeatView[] = this.seatedPlayers().map((p) => ({
       seat: p.seat,
       address: p.address,
-      ensName: p.ensName,
+      handle: p.handle,
       avatar: p.avatar,
       stack: p.stack,
       bet: p.streetBet,

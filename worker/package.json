@@ -7,7 +7,8 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "db:local": "wrangler d1 execute epoker --file=schema.sql --local",
-    "db:remote": "wrangler d1 execute epoker --file=schema.sql --remote"
+    "db:remote": "wrangler d1 execute epoker --file=schema.sql --remote",
+    "test": "node --experimental-strip-types test/chat.test.mts"
   },
   "dependencies": {
     "viem": "^2.21.0"

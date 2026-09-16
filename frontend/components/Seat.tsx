@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import type { SeatView, Card } from '@/lib/types';
 import { displayName, formatChips, cn } from '@/lib/utils';
+import { Avatar } from './Avatar';
 import { PlayingCard } from './PlayingCard';
 
 export function Seat({
@@ -30,7 +31,7 @@ export function Seat({
     return onSit ? (
       <button
         onClick={onSit}
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-gold-500/40 bg-night-950/60 px-2.5 py-1.5 text-[11px] text-gold-400/80 backdrop-blur-sm transition-colors hover:border-gold-500/80 hover:bg-gold-500/10 hover:text-gold-300 sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13px]"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-acid-400/40 bg-night-950/60 px-2.5 py-1.5 text-[11px] text-acid/80 backdrop-blur-sm transition-colors hover:border-acid-400/80 hover:bg-acid-400/10 hover:text-acid sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13px]"
       >
         <span className="text-base leading-none">+</span> Sit here
       </button>
@@ -49,31 +50,27 @@ export function Seat({
         className={cn(
           'relative flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-md sm:gap-2.5 sm:py-1.5 sm:pl-1.5 sm:pr-4',
           view.acting
-            ? 'animate-pulseRing border-ens-400 bg-night-950/75'
+            ? 'animate-pulse border-acid-400 bg-night-950/75'
             : isYou
-              ? 'border-gold-500/60 bg-gold-500/[0.18]'
-              : 'border-gold-500/25 bg-night-950/70',
+              ? 'border-acid-400/60 bg-acid-400/[0.18]'
+              : 'border-acid-400/25 bg-night-950/70',
           !view.connected && 'grayscale',
         )}
       >
-        {view.avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={view.avatar}
-            alt=""
-            className="h-7 w-7 shrink-0 rounded-full border-2 border-gold-300/50 object-cover sm:h-[42px] sm:w-[42px] md:h-[48px] md:w-[48px]"
-          />
-        ) : (
-          <span className="gold-fill flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-gold-300/70 font-display text-[13px] font-bold text-night-900 sm:h-[42px] sm:w-[42px] sm:text-[18px] md:h-[48px] md:w-[48px]">
-            {displayName(view.ensName, view.address).slice(0, 1).toUpperCase()}
-          </span>
-        )}
+        <Avatar
+          record={view.avatar}
+          handle={view.handle}
+          address={view.address}
+          size={48}
+          className="h-7 w-7 border-2 border-acid/50 sm:h-[42px] sm:w-[42px] md:h-[48px] md:w-[48px]"
+          monogramClassName="text-[13px] sm:text-[18px]"
+        />
         <div className="min-w-0 text-left">
-          <p className="max-w-[72px] truncate text-[10.5px] font-semibold text-slate-100 sm:max-w-32 sm:text-[13px] md:max-w-40 md:text-[14px]">
+          <p className="max-w-[72px] truncate text-[10.5px] font-semibold text-cream sm:max-w-32 sm:text-[13px] md:max-w-40 md:text-[14px]">
             {isYou ? 'You · ' : ''}
-            {displayName(view.ensName, view.address)}
+            {displayName(view.handle, view.address)}
           </p>
-          <p className="font-mono text-[10px] tabular-nums text-gold-400 sm:text-[12px] md:text-[12.5px]">
+          <p className="font-mono text-[10px] tabular-nums text-acid sm:text-[12px] md:text-[12.5px]">
             {formatChips(view.stack)}
           </p>
         </div>
@@ -110,7 +107,7 @@ export function Seat({
 
       {/* Current street bet, displayed as chips in front of the seat */}
       {view.bet > 0 && (
-        <span className="rounded-full border border-gold-500/30 bg-night-950/80 px-2 py-0.5 font-mono text-[10px] tabular-nums text-gold-300 sm:px-2.5 sm:text-[11.5px]">
+        <span className="rounded-full border border-acid-400/30 bg-night-950/80 px-2 py-0.5 font-mono text-[10px] tabular-nums text-acid sm:px-2.5 sm:text-[11.5px]">
           {formatChips(view.bet)}
         </span>
       )}
@@ -131,7 +128,7 @@ function TimerBar({ deadline }: { deadline: number }) {
   return (
     <div className="h-1 w-20 overflow-hidden rounded-full bg-night-800/90 sm:w-28">
       <div
-        className={cn('h-full transition-all', pct < 30 ? 'bg-red-500' : 'bg-ens-400')}
+        className={cn('h-full transition-all', pct < 30 ? 'bg-red-500' : 'bg-acid-400')}
         style={{ width: `${pct}%` }}
       />
     </div>

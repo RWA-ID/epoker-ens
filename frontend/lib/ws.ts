@@ -22,7 +22,7 @@ export interface HandResult {
 interface Identity {
   address: string;
   sig: string;
-  ensName: string | null;
+  handle: string | null;
   avatar: string | null;
 }
 
@@ -62,7 +62,7 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
       const params = new URLSearchParams({
         address: identity.address,
         sig: identity.sig,
-        name: identity.ensName ?? '',
+        name: identity.handle ?? '',
         avatar: identity.avatar ?? '',
       });
       ws = new WebSocket(`${WORKER_WS_URL}/table/${tableId}/ws?${params}`);

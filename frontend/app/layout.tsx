@@ -1,11 +1,26 @@
 import type { Metadata } from 'next';
-import { Playfair_Display, Inter, IBM_Plex_Mono } from 'next/font/google';
+import { Archivo, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Header } from '@/components/Header';
+import { Mark } from '@/components/Mark';
 
-const display = Playfair_Display({ subsets: ['latin'], variable: '--font-display' });
-const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
+/**
+ * Archivo variable, loaded WITH the `wdth` axis — the design leans on
+ * `font-stretch: 72–85%` for every display heading, and without that axis the
+ * property silently does nothing and the type just looks wrong.
+ *
+ * (The brief's reference face is Morway, a commercial sporty italic. Archivo
+ * is the free stand-in; if Morway is ever licensed, self-host it and keep
+ * Archivo as the fallback.)
+ */
+const display = Archivo({
+  subsets: ['latin'],
+  style: ['normal', 'italic'],
+  axes: ['wdth'],
+  variable: '--font-display',
+});
+
 const mono = IBM_Plex_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
@@ -13,55 +28,68 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ENS Hold’em — epoker.eth',
+  title: 'HoodPoker — free Texas Hold’em on Robinhood Chain',
   description:
-    'Texas Hold’em for the ENS community. Play with your ENS name, climb the leaderboard, hold $ENS and vote in the DAO.',
+    'No tokens to hold. No buy-ins. No real value — just the fastest free poker table on Robinhood Chain. Grab a seat, stack virtual chips, and run up the leaderboard.',
 };
+
+const FOOTER_LINKS = [
+  {
+    heading: 'Play',
+    links: [
+      { label: 'Lobby', href: '/#lobby' },
+      { label: 'Leaderboard', href: '/leaderboard/' },
+      { label: 'FAQ', href: '/#faq' },
+    ],
+  },
+  {
+    heading: 'Project',
+    links: [
+      { label: 'GitHub', href: 'https://github.com/RWA-ID/epoker-ens', external: true },
+      { label: 'Rules', href: '/#how' },
+    ],
+  },
+];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
-      <body className="font-sans min-h-screen flex flex-col">
+    <html lang="en" className={`${display.variable} ${mono.variable}`}>
+      <body className="flex min-h-screen flex-col font-sans">
         <Providers>
           <Header />
           <main className="flex-1">{children}</main>
-          <footer className="mt-auto border-t border-white/5 px-4 py-9">
-            <div className="mx-auto flex max-w-3xl flex-col items-center gap-3.5 text-center">
-              <p className="text-[13px] text-slate-400">
-                <span className="font-display text-gold-400">epoker.eth</span> · ENS High Roller
-                Table · virtual chips only — no real-money gambling
-              </p>
-              <p className="max-w-xl text-[11.5px] leading-relaxed text-slate-600">
-                Independent community project. Not affiliated with, endorsed by, or connected to
-                ENS, ENS DAO, or ENS Labs. “ENS” is referenced solely to describe compatibility
-                with the Ethereum Name Service.
-              </p>
-              <div className="mt-0.5 flex items-center gap-4">
-                <a
-                  href="https://x.com/ensgianteth"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-200"
-                >
-                  {/* X (Twitter) logo */}
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                  Built by @ensgianteth
-                </a>
-                <span className="text-slate-700">·</span>
-                <a
-                  href="https://github.com/RWA-ID/epoker-ens"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-slate-200"
-                >
-                  {/* GitHub logo */}
-                  <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-                  </svg>
-                  GitHub
-                </a>
+
+          <footer className="border-t border-cream/10 px-[22px] pb-[54px] pt-[46px]">
+            <div className="mx-auto flex max-w-shell flex-wrap items-start justify-between gap-10">
+              <div className="max-w-xl">
+                <Mark size={26} />
+                <p className="mt-4 font-mono text-[11.5px] leading-[1.75] text-faint">
+                  Virtual chips only. No buy-ins, no wagering, no token to hold, no monetary
+                  value — a free game built for fun. Independent community project, not
+                  affiliated with, endorsed by or connected to Robinhood Markets, Inc.
+                </p>
+              </div>
+              <div className="flex gap-11">
+                {FOOTER_LINKS.map((col) => (
+                  <div key={col.heading}>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ghost">
+                      {col.heading}
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                      {col.links.map((l) => (
+                        <li key={l.label}>
+                          <a
+                            href={l.href}
+                            {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                            className="font-mono text-[11.5px] text-dim transition-colors hover:text-acid"
+                          >
+                            {l.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             </div>
           </footer>

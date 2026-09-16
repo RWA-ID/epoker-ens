@@ -1,83 +1,87 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * ENS Hold'em design tokens — "High Roller" theme.
- * Playfair Display serif headlines, Inter body, IBM Plex Mono numerals,
- * gold gradient (#f4e4b8 → #c9a24e) accents over a near-black night bg,
- * ENS blue reserved for $ENS/DAO surfaces.
+ * HoodPoker design tokens — values taken verbatim from the design handoff
+ * (design_handoff_hoodpoker_landing/README.md § Design Tokens). Do not
+ * "tidy" these hexes; the neutrals are deliberately near-black and slightly
+ * warm rather than pure grey.
  */
 const config: Config = {
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
+    screens: {
+      // Spec: the leaderboard's 44/1fr/92/84 grid is the tightest element;
+      // the Hands column is hidden below this.
+      xs: '420px',
+      sm: '640px',
+      md: '768px',
+      lg: '1024px',
+      xl: '1280px',
+    },
     extend: {
       colors: {
-        ens: {
-          50: '#eef6ff',
-          100: '#d9ebff',
-          200: '#bcdcff',
-          300: '#8ec6ff',
-          400: '#5298ff', // ENS primary blue
-          500: '#3888ff',
-          600: '#2071f5',
-          700: '#185ce1',
-          800: '#1b4bb6',
-          900: '#1c418f',
-          950: '#162a57',
+        acid: {
+          DEFAULT: '#ccff00',
+          400: '#ccff00', // primary accent
+          hover: '#e0ff4d', // solid-button hover fill
+          link: '#e6ff66', // a:hover
         },
-        felt: {
-          DEFAULT: '#12306b', // table felt blue
-          dark: '#0b1f4a',
-          rim: '#0a0f1e', // leather rail
-        },
-        gold: {
-          200: '#f4e4b8', // gradient light stop
-          300: '#f0d693',
-          400: '#e3bd6d',
-          500: '#c9a24e', // brass/gold accents from the table art
-          600: '#a67f35',
-        },
+        ink: '#0a0a06', // text ON accent surfaces
         night: {
-          800: '#14161e',
-          850: '#0f1118', // panel bg
-          900: '#0a0b11',
-          950: '#08090d', // page bg
+          950: '#050505', // page background
+          900: '#080805', // cards, panels, rows
+          850: '#0d0e0a', // surface gradient top
+          800: '#12140c', // surface gradient hover top
         },
-        cream: '#faf7f0',
-        ink: '#1a1206', // text on gold
+        cream: '#f2f2f0', // primary text
+        muted: '#a8ada0', // body copy
+        dim: '#8b8f84', // nav links, inactive chips
+        faint: '#7e8277', // mono metadata, labels
+        ghost: '#4f5349', // footer headings, ranks 4+
       },
       fontFamily: {
-        display: ['var(--font-display)', 'serif'],
-        sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'Archivo', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-display)', 'Archivo', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
+      maxWidth: {
+        shell: '1180px',
+        faq: '860px',
+      },
+      borderRadius: {
+        btn: '6px',
+        cta: '7px',
+        faq: '10px',
+        card: '12px',
+      },
       boxShadow: {
-        glow: '0 0 24px rgba(82, 152, 255, 0.35)',
-        gold: '0 8px 24px rgba(201, 162, 78, 0.25)',
-        goldlg: '0 10px 30px rgba(201, 162, 78, 0.28)',
+        cta: '0 10px 40px rgba(204,255,0,0.28)',
+        header: '0 0 24px rgba(204,255,0,0.45)',
       },
       keyframes: {
+        hpMarquee: {
+          from: { transform: 'translateX(0)' },
+          // half the container PLUS half the 34px gap — see the ticker note.
+          to: { transform: 'translateX(calc(-50% - 17px))' },
+        },
+        hpPulse: {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(204,255,0,0.7)' },
+          '50%': { boxShadow: '0 0 0 7px rgba(204,255,0,0)' },
+        },
+        hpRise: {
+          from: { opacity: '0', transform: 'translateY(18px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
         dealIn: {
           '0%': { opacity: '0', transform: 'translateY(-12px) scale(0.9)' },
           '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
         },
-        pulseRing: {
-          '0%, 100%': { boxShadow: '0 0 0 0 rgba(82,152,255,0.6)' },
-          '50%': { boxShadow: '0 0 0 6px rgba(82,152,255,0)' },
-        },
-        livePulse: {
-          '0%, 100%': { boxShadow: '0 0 0 0 rgba(76,222,128,0.55)' },
-          '50%': { boxShadow: '0 0 0 5px rgba(76,222,128,0)' },
-        },
-        floatUp: {
-          from: { opacity: '0', transform: 'translateY(14px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
       },
       animation: {
+        marquee: 'hpMarquee 26s linear infinite',
+        pulse: 'hpPulse 1.6s infinite',
+        rise: 'hpRise 0.6s ease-out both',
         dealIn: 'dealIn 0.3s ease-out both',
-        pulseRing: 'pulseRing 1.4s ease-in-out infinite',
-        livePulse: 'livePulse 1.6s infinite',
-        floatUp: 'floatUp 0.5s ease-out both',
       },
     },
   },

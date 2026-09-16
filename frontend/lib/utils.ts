@@ -11,8 +11,8 @@ export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-export function displayName(ensName: string | null | undefined, address: string): string {
-  return ensName || shortAddress(address);
+export function displayName(handle: string | null | undefined, address: string): string {
+  return handle || shortAddress(address);
 }
 
 export function formatChips(n: number): string {

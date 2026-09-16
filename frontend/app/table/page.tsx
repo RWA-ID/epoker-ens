@@ -12,7 +12,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSignMessage } from 'wagmi';
 import { useAppKit } from '@reown/appkit/react';
-import { useEnsIdentity } from '@/lib/ens';
+import { useIdentity } from '@/lib/identity';
 import { ensureAuth, cachedSignature } from '@/lib/auth';
 import { useTableSocket } from '@/lib/ws';
 import { isMuted, setMuted } from '@/lib/sounds';
@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { PokerTable } from '@/components/PokerTable';
 import { ActionBar } from '@/components/ActionBar';
 import { ChatPanel } from '@/components/ChatPanel';
-import { HoldingsBanner } from '@/components/HoldingsBanner';
 
 const STAGE_LABEL: Record<string, string> = {
   waiting: 'Waiting', preflop: 'Pre-flop', flop: 'Flop',
@@ -39,7 +38,7 @@ export default function TablePage() {
 function TableInner() {
   const tableId = useSearchParams().get('id');
   const { open } = useAppKit();
-  const { address, isConnected, ensName, avatar } = useEnsIdentity();
+  const { address, isConnected, isRestoring, handle, avatar } = useIdentity();
   const { signMessageAsync } = useSignMessage();
 
   const [sig, setSig] = useState<string | null>(null);
@@ -79,8 +78,8 @@ function TableInner() {
   }, [isConnected, address, sig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const identity = useMemo(
-    () => (address && sig ? { address: address.toLowerCase(), sig, ensName, avatar } : null),
-    [address, sig, ensName, avatar],
+    () => (address && sig ? { address: address.toLowerCase(), sig, handle, avatar } : null),
+    [address, sig, handle, avatar],
   );
 
   const table = useTableSocket(tableId, identity);
@@ -101,6 +100,10 @@ function TableInner() {
 
   /* ---------- Guard rails ---------- */
   if (!tableId) return <PageNote text="No table id — head back to the lobby." lobby />;
+  // A full page load rebuilds the WalletConnect session; throughout that
+  // window isConnected is false. Branching on it alone tells somebody who
+  // connected thirty seconds ago to connect again.
+  if (isRestoring) return <PageNote text="Reconnecting your wallet…" />;
   if (!isConnected) {
     return (
       <PageNote text="Connect your wallet to take a seat.">
@@ -144,11 +147,11 @@ function TableInner() {
             </Button>
           </Link>
           <div>
-            <h1 className="font-display text-[22px] font-semibold leading-tight text-cream">
+            <h1 className="hp-display hp-w80 text-[22px] leading-tight text-cream">
               {state.name}
             </h1>
-            <p className="mt-0.5 font-mono text-xs text-slate-500">
-              Blinds {state.smallBlind} / {state.bigBlind} · Buy-in {formatChips(state.buyIn)} ·{' '}
+            <p className="mt-0.5 font-mono text-xs text-dim">
+              Blinds {state.smallBlind} / {state.bigBlind} · Stack {formatChips(state.buyIn)} ·{' '}
               {state.seats.length} / {state.maxPlayers} seated
               {state.isPrivate && ` · ${state.whitelist?.length ?? 0} invited`}
               {inHand && ` · Hand #${state.handNumber}`}
@@ -158,7 +161,7 @@ function TableInner() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {state.isPrivate && (
-            <span className="flex items-center gap-1.5 rounded-full border border-ens-400/30 bg-ens-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-ens-300">
+            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
               🔒 Private
             </span>
           )}
@@ -167,13 +170,13 @@ function TableInner() {
               'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]',
               inHand
                 ? 'border-green-400/30 bg-green-400/10 text-green-400'
-                : 'border-gold-500/30 bg-gold-500/10 text-gold-400',
+                : 'border-acid-400/30 bg-acid-400/10 text-acid',
             )}
           >
             <span
               className={cn(
                 'h-1.5 w-1.5 rounded-full',
-                inHand ? 'animate-livePulse bg-green-400' : 'bg-gold-400',
+                inHand ? 'animate-pulse bg-green-400' : 'bg-acid',
               )}
             />
             {inHand ? `In hand · ${STAGE_LABEL[state.stage]}` : 'Waiting for players'}
@@ -182,7 +185,7 @@ function TableInner() {
             {muted ? '🔇 Sounds off' : '🔊 Sounds on'}
           </Button>
           <Button variant="outline" size="sm" onClick={copyInvite}>
-            {copied ? 'Copied!' : '🔗 Invite frENS'}
+            {copied ? 'Copied!' : '🔗 Invite'}
           </Button>
           {me && (
             <Button variant="danger" size="sm" onClick={table.leave}>
@@ -200,16 +203,16 @@ function TableInner() {
 
       {/* Private table, and you're not on the guest list → spectate only */}
       {state.isPrivate && !state.canSit && state.yourSeat === null && (
-        <div className="mb-3 rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-2.5 text-sm text-gold-200">
-          🔒 This is a private table — only ENS names on the host’s guest list can take a seat.
-          You’re welcome to watch.
+        <div className="mb-3 rounded-xl border border-acid-400/30 bg-acid-400/10 px-4 py-2.5 text-sm text-acid">
+          🔒 This is a private table — only names on the host’s guest list can take a seat.
+          You’re welcome to watch and chat.
         </div>
       )}
 
       {/* Guest list, shown while the private table fills up */}
       {state.isPrivate && !!state.whitelist?.length && !inHand && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-          <span className="mr-1 font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-dim">
+          <span className="mr-1 font-semibold uppercase tracking-[0.14em] text-dim">
             Guest list:
           </span>
           {state.whitelist.map((g) => {
@@ -221,10 +224,10 @@ function TableInner() {
                   'rounded-full border px-2.5 py-1 font-mono text-[11px]',
                   seated
                     ? 'border-green-400/30 bg-green-400/10 text-green-400'
-                    : 'border-white/10 text-slate-400',
+                    : 'border-white/10 text-muted',
                 )}
               >
-                {displayName(g.ensName, g.address)}
+                {displayName(g.handle, g.address)}
                 {seated && ' ✓'}
               </span>
             );
@@ -239,21 +242,15 @@ function TableInner() {
           <div className="mt-4">
             <ActionBar state={state} onAct={table.act} />
           </div>
-          {/* Post-hand result + DAO nudge (product requirement #5) */}
+          {/* Post-hand result */}
           {table.lastResult && state.stage === 'showdown' && (
-            <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-gold-500/30 bg-gradient-to-b from-[#18140c]/80 to-night-850/80 px-5 py-4 text-center text-sm">
+            <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-acid-400/30 bg-gradient-to-b from-[#141a08]/80 to-night-850/80 px-5 py-4 text-center text-sm">
               {table.lastResult.winners.map((w, i) => (
-                <p key={i} className="font-display text-base font-semibold text-gold-300">
-                  🏆 {displayName(w.ensName, w.address)} wins {formatChips(w.amount)}
+                <p key={i} className="hp-display hp-w85 text-base text-acid">
+                  🏆 {displayName(w.handle, w.address)} wins {formatChips(w.amount)}
                   {w.handName ? ` with ${w.handName}` : ''}
                 </p>
               ))}
-              <p className="mt-1.5 text-xs text-slate-500">
-                Winners hold. So do DAO voters — keep your $ENS and make it count at{' '}
-                <a href="https://agora.ensdao.org" target="_blank" rel="noreferrer" className="underline">
-                  agora.ensdao.org
-                </a>
-              </p>
             </div>
           )}
         </div>
@@ -262,7 +259,6 @@ function TableInner() {
         <div className="lg:relative">
           <div className="flex flex-col gap-4 lg:absolute lg:inset-0">
             <ChatPanel messages={table.chat} onSend={table.say} you={identity?.address} />
-            <HoldingsBanner compact />
           </div>
         </div>
       </div>
@@ -281,7 +277,7 @@ function PageNote({
 }) {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
-      <p className="text-slate-400">{text}</p>
+      <p className="text-muted">{text}</p>
       {children}
       {lobby && (
         <Link href="/"><Button variant="outline">Back to Lobby</Button></Link>

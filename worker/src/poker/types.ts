@@ -16,7 +16,7 @@ export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin';
 export interface SeatView {
   seat: number;
   address: string;
-  ensName: string | null;
+  handle: string | null;
   avatar: string | null;
   stack: number;
   /** Chips committed on the current betting street. */
@@ -67,13 +67,13 @@ export interface TableView {
 /** One invited player on a private table's guest list. */
 export interface WhitelistEntry {
   address: string; // lowercase 0x…
-  ensName: string | null;
+  handle: string | null;
 }
 
 export interface HandResultShare {
   seat: number;
   address: string;
-  ensName: string | null;
+  handle: string | null;
   amount: number;
   handName: string | null;
   cards?: Card[];
@@ -81,7 +81,7 @@ export interface HandResultShare {
 
 export interface ChatMessage {
   address: string;
-  ensName: string | null;
+  handle: string | null;
   text: string;
   ts: number;
 }
