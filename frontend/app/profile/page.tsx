@@ -6,8 +6,7 @@
  */
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSignMessage } from 'wagmi';
-import { useAppKit } from '@reown/appkit/react';
+import { useConnect, useWallet } from '@/lib/wallet';
 import { api } from '@/lib/api';
 import { ensureAuth } from '@/lib/auth';
 import { useIdentity } from '@/lib/identity';
@@ -18,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar } from '@/components/Avatar';
 
 export default function ProfilePage() {
-  const { open } = useAppKit();
+  const open = useConnect();
   const {
     address,
     handle,
@@ -30,7 +29,7 @@ export default function ProfilePage() {
     isLoadingHandle,
     setHandle,
   } = useIdentity();
-  const { signMessageAsync } = useSignMessage();
+  const { signMessage } = useWallet();
   const queryClient = useQueryClient();
 
   const [claiming, setClaiming] = useState(false);
@@ -49,7 +48,7 @@ export default function ProfilePage() {
     setClaiming(true);
     setClaimMsg(null);
     try {
-      const sig = await ensureAuth(address, signMessageAsync);
+      const sig = await ensureAuth(address, signMessage);
       const res = await api.claim({ address: address.toLowerCase(), sig });
       setClaimMsg(`+${formatChips(res.claimed)} chips claimed! 🎉`);
       void queryClient.invalidateQueries({ queryKey: ['profile', address] });
@@ -75,7 +74,7 @@ export default function ProfilePage() {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
         <p className="text-muted">Connect your wallet to view your profile.</p>
-        <Button onClick={() => open()}>Connect Wallet</Button>
+        <Button onClick={() => open()}>Sign in</Button>
       </div>
     );
   }

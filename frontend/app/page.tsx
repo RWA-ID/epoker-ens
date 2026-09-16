@@ -11,11 +11,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSignMessage } from 'wagmi';
 import { getEnsAddress } from '@wagmi/core';
 import { isAddress } from 'viem';
 import { normalize } from 'viem/ens';
-import { useAppKit } from '@reown/appkit/react';
+import { useConnect, useWallet } from '@/lib/wallet';
 import { api } from '@/lib/api';
 import { ensureAuth } from '@/lib/auth';
 import { useIdentity } from '@/lib/identity';
@@ -91,9 +90,9 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 export default function HomePage() {
   const router = useRouter();
-  const { open } = useAppKit();
+  const open = useConnect();
   const { address, isConnected, isRestoring } = useIdentity();
-  const { signMessageAsync } = useSignMessage();
+  const { signMessage } = useWallet();
 
   const [stake, setStake] = useState<string>('All');
   const [creating, setCreating] = useState(false);
@@ -178,7 +177,7 @@ export default function HomePage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const sig = await ensureAuth(address, signMessageAsync);
+      const sig = await ensureAuth(address, signMessage);
       const { id } = await api.createTable(
         { address, sig },
         {
@@ -487,7 +486,7 @@ export default function HomePage() {
                 <p className="font-mono text-[11px] text-red-400">{createError}</p>
               )}
               <Button className="w-full" onClick={createTable} disabled={creating}>
-                {creating ? 'Creating…' : isConnected ? 'Create table' : 'Connect to create'}
+                {creating ? 'Creating…' : isConnected ? 'Create table' : 'Sign in to create'}
               </Button>
             </div>
           )}

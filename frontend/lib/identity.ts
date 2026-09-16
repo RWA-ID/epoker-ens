@@ -14,8 +14,9 @@
  * lib/avatar.ts for why resolving it eagerly costs ~29s and usually fails.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useAccount, useEnsName, useEnsText } from 'wagmi';
+import { useEnsName, useEnsText } from 'wagmi';
 import { useHoodfiNames } from './hoodfi';
+import { useWallet, type WalletSource } from './wallet';
 
 const PICK_KEY = (address: string) => `epoker:handle:${address.toLowerCase()}`;
 
@@ -30,10 +31,10 @@ function readPick(address: string | undefined): string | null {
 
 export interface Identity {
   address: `0x${string}` | undefined;
-  /** wagmi's four-state status — 'reconnecting' is NOT 'disconnected'. */
-  status: 'connecting' | 'reconnecting' | 'connected' | 'disconnected';
+  /** 'appkit' for an external wallet, 'passkey' for a Privy embedded wallet. */
+  source: WalletSource | null;
   isConnected: boolean;
-  /** True while wagmi is restoring a stored session on a fresh page load. */
+  /** True while a stored session is being restored on a fresh page load. */
   isRestoring: boolean;
   /** The name to show, or null to fall back to the address. */
   handle: string | null;
@@ -49,27 +50,8 @@ export interface Identity {
   setHandle: (name: string | null) => void;
 }
 
-/**
- * How long to believe a `connecting`/`reconnecting` status before treating the
- * visitor as disconnected.
- *
- * wagmi does not reliably settle to `disconnected` when there is nothing to
- * restore: observed on a clean profile with `wagmi.store.current === null` and
- * zero connections, the status stayed `reconnecting` indefinitely, so a
- * first-time visitor saw "Reconnecting…" instead of "Connect Wallet" forever.
- * Real restores are much faster than this — measured at ~520ms warm and
- * ~1290ms cold — so the bound costs a genuine reconnect nothing.
- */
-const RESTORE_TIMEOUT_MS = 3000;
-
 export function useIdentity(): Identity {
-  const { address, status } = useAccount();
-
-  const [restoreExpired, setRestoreExpired] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setRestoreExpired(true), RESTORE_TIMEOUT_MS);
-    return () => clearTimeout(t);
-  }, []);
+  const { address, source, isConnected, isRestoring } = useWallet();
 
   const { data: hoodfi, isLoading: loadingHoodfi } = useHoodfiNames(address);
   const { data: ensName, isLoading: loadingEns } = useEnsName({ address, chainId: 1 });
@@ -111,10 +93,9 @@ export function useIdentity(): Identity {
 
   return {
     address,
-    status,
-    isConnected: status === 'connected',
-    isRestoring:
-      (status === 'reconnecting' || status === 'connecting') && !restoreExpired,
+    source,
+    isConnected,
+    isRestoring,
     handle,
     avatar,
     hoodfiNames: owned.map(({ name, avatar }) => ({ name, avatar })),

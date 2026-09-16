@@ -11,8 +11,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAppKit } from '@reown/appkit/react';
-import { useDisconnect } from 'wagmi';
 import { useIdentity } from '@/lib/identity';
+import { useConnect, useWallet } from '@/lib/wallet';
 import { clearSignature } from '@/lib/auth';
 import { resetWalletSession } from '@/lib/session';
 import { displayName, cn } from '@/lib/utils';
@@ -30,8 +30,9 @@ const NAV = [
 export function Header() {
   const pathname = usePathname();
   const { open } = useAppKit();
-  const { disconnectAsync } = useDisconnect();
-  const { address, handle, avatar, isConnected, isRestoring } = useIdentity();
+  const connect = useConnect();
+  const { disconnect: disconnectWallet } = useWallet();
+  const { address, source, handle, avatar, isConnected, isRestoring } = useIdentity();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,13 +57,8 @@ export function Header() {
   const disconnect = async () => {
     setBusy(true);
     const who = address;
-    try {
-      // Never await a wallet round trip unbounded — a WalletConnect reply that
-      // never arrives would leave this button spinning forever.
-      await Promise.race([disconnectAsync(), new Promise((r) => setTimeout(r, 3000))]);
-    } catch {
-      /* falling through to the local clear is the point */
-    }
+    // Bounded inside useWallet — falling through to the local clear is the point.
+    await disconnectWallet();
     if (who) clearSignature(who);
     setBusy(false);
     setMenuOpen(false);
@@ -128,7 +124,11 @@ export function Header() {
                       {address.toLowerCase()}
                     </p>
                   </div>
-                  <MenuItem onClick={() => { setMenuOpen(false); open(); }}>Wallet details</MenuItem>
+                  {source === 'passkey' ? (
+                    <p className="px-4 py-2.5 font-mono text-[10.5px] text-faint">Signed in with a passkey</p>
+                  ) : (
+                    <MenuItem onClick={() => { setMenuOpen(false); open(); }}>Wallet details</MenuItem>
+                  )}
                   <MenuItem onClick={disconnect} disabled={busy} tone="danger">
                     {busy ? 'Disconnecting…' : 'Disconnect'}
                   </MenuItem>
@@ -143,8 +143,8 @@ export function Header() {
               )}
             </div>
           ) : (
-            <Button size="md" className="shadow-none hover:shadow-header" onClick={() => open()}>
-              Connect Wallet
+            <Button size="md" className="shadow-none hover:shadow-header" onClick={connect}>
+              Sign in
             </Button>
           )}
         </div>

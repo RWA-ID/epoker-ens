@@ -3,6 +3,14 @@
 export const REOWN_PROJECT_ID =
   process.env.NEXT_PUBLIC_REOWN_PROJECT_ID ?? '43bdd1b8c477ac4d4a4264a14a8472f8';
 
+/**
+ * Privy app — used ONLY for passkey sign-in (which creates an embedded wallet).
+ * Every external wallet still connects through AppKit. Public by design; the
+ * app secret never belongs in this frontend.
+ */
+export const PRIVY_APP_ID =
+  process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? 'cmt3m6kfx00120dkswllyxcwd';
+
 export const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY ?? '';
 
 /**

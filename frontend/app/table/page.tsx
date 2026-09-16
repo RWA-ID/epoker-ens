@@ -10,8 +10,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useSignMessage } from 'wagmi';
-import { useAppKit } from '@reown/appkit/react';
+import { useConnect, useWallet } from '@/lib/wallet';
 import { useIdentity } from '@/lib/identity';
 import { ensureAuth, cachedSignature } from '@/lib/auth';
 import { useTableSocket } from '@/lib/ws';
@@ -37,9 +36,9 @@ export default function TablePage() {
 
 function TableInner() {
   const tableId = useSearchParams().get('id');
-  const { open } = useAppKit();
+  const open = useConnect();
   const { address, isConnected, isRestoring, handle, avatar } = useIdentity();
-  const { signMessageAsync } = useSignMessage();
+  const { signMessage } = useWallet();
 
   const [sig, setSig] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
@@ -57,7 +56,7 @@ function TableInner() {
     setSigning(true);
     setSignError(null);
     try {
-      setSig(await ensureAuth(address, signMessageAsync));
+      setSig(await ensureAuth(address, signMessage));
     } catch (err) {
       setSignError(err instanceof Error ? err.message : 'Signature rejected');
     } finally {
@@ -107,7 +106,7 @@ function TableInner() {
   if (!isConnected) {
     return (
       <PageNote text="Connect your wallet to take a seat.">
-        <Button onClick={() => open()}>Connect Wallet</Button>
+        <Button onClick={() => open()}>Sign in</Button>
       </PageNote>
     );
   }

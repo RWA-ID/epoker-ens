@@ -16,7 +16,7 @@
  * is usually enough to come back disconnected.
  */
 
-const WALLET_KEY_PREFIXES = ['@appkit', 'wagmi.', 'wc@', 'walletconnect', 'W3M_', 'w3m'];
+const WALLET_KEY_PREFIXES = ['@appkit', 'wagmi.', 'wc@', 'walletconnect', 'W3M_', 'w3m', 'privy:'];
 const WC_DATABASE = 'WALLET_CONNECT_V2_INDEXED_DB';
 
 /** Only the wallet's own keys — other things live in this origin too. */
