@@ -59,7 +59,7 @@ epoker-eth/
     ├── src/index.ts           router: /tables /leaderboard /profile /claim + WS forwarding
     ├── src/table.ts           TableDO — ONE Durable Object per table, all game logic
     ├── src/session.ts         SIWE nonces + verification, HMAC session tokens
-    ├── src/auth.ts            legacy static-signature check (transitional)
+    ├── src/auth.ts            legacy static-signature check (OFF: ALLOW_LEGACY_SIG=0)
     ├── src/handle.ts          on-chain check that a claimed hoodfi name is really yours
     ├── src/chat.ts            chat sanitizer (links stripped; `.eth` names preserved)
     ├── src/poker/deck.ts      crypto.getRandomValues Fisher–Yates shuffle
@@ -209,7 +209,16 @@ Alternatives to IPFS: `npx wrangler pages deploy out` (CF Pages) or import
 1. Pin `out/` to IPFS and copy the CID (`pin.mjs` prints it).
 2. In the [ENS app](https://app.ens.domains), set the **Content Hash** record
    of `epoker.eth` to `ipfs://<CID>`.
-3. The site resolves at `https://epoker.eth.limo`. Repeat pin + contenthash
+3. Confirm the new pin is actually what's being served before you rely on it:
+
+   ```bash
+   curl -s https://epoker.eth.limo/ | grep -c "$(cat frontend/.next/BUILD_ID)"
+   ```
+
+   `1` means the contenthash propagated. A `200` alone proves nothing — a
+   gateway will keep serving the previous pin for a while, so fetch the old
+   CID's `index.html` as a control and check the two differ.
+4. The site resolves at `https://epoker.eth.limo`. Repeat pin + contenthash
    update on each release.
 
 A fresh pin often 504s on `_next/static/chunks/*.js` until the CID propagates,
@@ -228,9 +237,14 @@ worker checks domain, origin, chain, expiry, signature and nonce, then returns
 a 24h HMAC session token (`SESSION_SECRET`). API calls send it as
 `Authorization: Bearer`, sockets as `?token=`. The router derives the player's
 address from the token and passes only that to the table. Rotating
-`SESSION_SECRET` signs everyone out. `ALLOW_LEGACY_SIG=1` still accepts the old
-static signature for the pre-SIWE frontend — set it to `0` once `epoker.eth`
-points at a SIWE build.
+`SESSION_SECRET` signs everyone out.
+
+SIWE is now the **only** way in: `ALLOW_LEGACY_SIG` is `"0"` and the old
+replayable static signature is refused. The flag exists for the changeover —
+a worker that issues nonces can be deployed while the pinned frontend is still
+the pre-SIWE build, because `"1"` keeps accepting that build's signature. Set
+it back to `"1"` only if you ever have to serve an old pin again, and turn it
+off the moment the contenthash points at a SIWE build.
 
 **Origins.** CORS, the SIWE domain check and WebSocket upgrades all use the
 `ALLOWED_ORIGINS` allowlist (`wrangler.toml`). Upgrades from any other origin
@@ -251,16 +265,34 @@ avatar is read from that verified name's record, never taken from the client.
 `NEXT_PUBLIC_*` values (Alchemy key, Reown ID, Privy app ID) are public by
 design — scope them to the frontend domains in their dashboards.
 
-### Deploying the hardening
+### Deploying the hardening (done — kept for a fork or a fresh D1)
+
+The order matters, and it is the reverse of what feels natural: **the worker
+goes first.** A SIWE frontend calls `/auth/nonce`, so pinning it before the
+worker exists means nobody can sign in. The worker, meanwhile, is safe to
+deploy early precisely because `ALLOW_LEGACY_SIG="1"` still honours the old
+pin's signature.
 
 ```bash
 cd worker
 npx wrangler d1 execute epoker --file=migrations/002_auth_nonces.sql --remote
-openssl rand -base64 48 | npx wrangler secret put SESSION_SECRET
+openssl rand -base64 48 | npx wrangler secret put SESSION_SECRET   # never echo it
 npx wrangler deploy          # legacy signatures still accepted
-# build + pin the frontend, point epoker.eth at it, then:
-# set ALLOW_LEGACY_SIG = "0" in wrangler.toml and deploy again
+
+cd ../frontend && npm run build && node pin.mjs                    # → CID
+# set the epoker.eth contenthash to that CID, then CONFIRM it is live:
+#   curl -s https://epoker.eth.limo/ | grep -c "$(cat .next/BUILD_ID)"
+# a 200 alone proves nothing — gateways happily serve the previous pin.
+
+# only once that greps 1:
+# set ALLOW_LEGACY_SIG = "0" in wrangler.toml, then:
+cd ../worker && npx wrangler deploy
 ```
+
+Flipping the flag before the new pin is really being served locks out every
+browser still on the old one. Tokens already issued are unaffected either way —
+they are HMAC-verified and never touch the legacy path — so only new sign-ins
+are at risk during the window.
 
 ## Known limitations
 
