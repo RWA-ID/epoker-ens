@@ -39,13 +39,13 @@ export function ActionBar({
   if (!me || me.folded || me.allIn) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-night-850/95 p-3.5 shadow-2xl backdrop-blur">
+    <div className="mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-night-850/95 p-3.5 shadow-2xl backdrop-blur tilt:p-2">
       {!isMyTurn ? (
-        <p className="py-2 text-center text-sm text-dim">
+        <p className="py-2 text-center text-sm text-dim tilt:py-1 tilt:text-xs">
           {state.stage === 'waiting' ? 'Hand starting soon…' : 'Waiting for other players…'}
         </p>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 tilt:gap-2">
           {/* Raise sizing */}
           {maxTo > state.currentBet && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
@@ -56,13 +56,13 @@ export function ActionBar({
                 step={state.smallBlind}
                 value={raiseTo}
                 onChange={(e) => setRaiseTo(Number(e.target.value))}
-                className="min-w-32 flex-1 accent-acid-400"
+                className="min-w-32 flex-1 accent-acid-400 tilt:min-w-0"
                 aria-label="Raise amount"
               />
-              <span className="w-20 text-right font-mono text-sm tabular-nums text-acid sm:w-24">
+              <span className="w-20 text-right font-mono text-sm tabular-nums text-acid sm:w-24 tilt:w-16 tilt:text-xs">
                 {formatChips(Math.min(raiseTo, maxTo))}
               </span>
-              <div className="hidden gap-1 sm:flex">
+              <div className="hidden gap-1 sm:flex tilt:hidden">
                 {presets.map((p) => (
                   <Button key={p.label} variant="ghost" size="sm" onClick={() => setRaiseTo(p.value)}>
                     {p.label}
@@ -72,28 +72,28 @@ export function ActionBar({
             </div>
           )}
 
-          {/* Actions — 2×2 on phones, one row from sm up */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Button variant="danger" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('fold')}>
+          {/* Actions — 2×2 on phones (and in tilt mode's side column), one row from sm up */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 tilt:grid-cols-2 tilt:gap-1.5">
+            <Button variant="danger" className="px-2 text-[13px] sm:px-4 sm:text-sm tilt:h-9 tilt:px-1.5 tilt:text-[12px]" onClick={() => onAct('fold')}>
               Fold
             </Button>
             {canCheck ? (
-              <Button variant="neutral" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('check')}>
+              <Button variant="neutral" className="px-2 text-[13px] sm:px-4 sm:text-sm tilt:h-9 tilt:px-1.5 tilt:text-[12px]" onClick={() => onAct('check')}>
                 Check
               </Button>
             ) : (
-              <Button variant="neutral" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('call')}>
+              <Button variant="neutral" className="px-2 text-[13px] sm:px-4 sm:text-sm tilt:h-9 tilt:px-1.5 tilt:text-[12px]" onClick={() => onAct('call')}>
                 Call {formatChips(toCall)}
               </Button>
             )}
             <Button
-              className="px-2 text-[13px] sm:px-4 sm:text-sm"
+              className="px-2 text-[13px] sm:px-4 sm:text-sm tilt:h-9 tilt:px-1.5 tilt:text-[12px]"
               onClick={() => onAct(isOpening ? 'bet' : 'raise', Math.min(raiseTo, maxTo))}
               disabled={maxTo <= state.currentBet}
             >
               {isOpening ? 'Bet' : 'Raise to'} {formatChips(Math.min(raiseTo, maxTo))}
             </Button>
-            <Button variant="outline" className="px-2 text-[13px] sm:px-4 sm:text-sm" onClick={() => onAct('allin')}>
+            <Button variant="outline" className="px-2 text-[13px] sm:px-4 sm:text-sm tilt:h-9 tilt:px-1.5 tilt:text-[12px]" onClick={() => onAct('allin')}>
               All-in {formatChips(me.stack)}
             </Button>
           </div>

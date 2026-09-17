@@ -11,7 +11,9 @@ import {
   Card, Stage, ClientMessage, ServerMessage, TableView, SeatView,
   ChatMessage, HandResultShare, WhitelistEntry,
   MIN_PLAYERS, MAX_PLAYERS, ACTION_SECONDS, INTERHAND_MS, BUYIN_BB,
+  PRACTICE_TABLE_ID, DISCONNECT_GRACE_MS,
 } from './poker/types';
+import { BOT_NAMES, decideBotAction } from './poker/bot';
 import { freshDeck, shuffle } from './poker/deck';
 import { evaluate7 } from './poker/evaluator';
 import { settlePots, Contributor } from './poker/pots';
@@ -21,6 +23,9 @@ import { verifyHandle } from './handle';
 
 /** How long a table may sit empty before it is closed and delisted. */
 const EMPTY_TABLE_CLOSE_MS = 60_000;
+
+/** Seat order bots take on the practice table — spread around the felt. */
+const BOT_SEAT_ORDER = [4, 2, 6, 0, 8, 3, 5, 1, 7];
 
 interface Player {
   seat: number;
@@ -40,6 +45,10 @@ interface Player {
   /** Has acted since the last full raise on this street. */
   acted: boolean;
   connected: boolean;
+  /** House bot — practice table only; never touches D1. */
+  bot?: boolean;
+  /** Left (or timed out) mid-hand: cashed out once the hand ends. */
+  leaving?: boolean;
 }
 
 interface Session {
@@ -58,6 +67,8 @@ interface TableConfig {
   maxPlayers?: number;
   /** Invited players (private tables only). Always includes the creator. */
   whitelist?: WhitelistEntry[];
+  /** Practice table: bots fill seats, free stacks, nothing persisted. */
+  practice?: boolean;
 }
 
 export class TableDO implements DurableObject {
@@ -82,6 +93,9 @@ export class TableDO implements DurableObject {
   private chatLog: ChatMessage[] = [];
   private actionTimer: ReturnType<typeof setTimeout> | null = null;
   private nextHandTimer: ReturnType<typeof setTimeout> | null = null;
+  private botTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Dropped players still holding their seat, by address. */
+  private graceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -104,6 +118,18 @@ export class TableDO implements DurableObject {
       const cfg = (await request.json()) as TableConfig;
       this.config = cfg;
       await this.state.storage.put('config', cfg);
+      return Response.json({ ok: true });
+    }
+
+    // The practice table has no creator — the router calls this before every
+    // request to it, so it (re)initializes itself after being closed.
+    if (url.pathname.endsWith('/ensure-practice') && request.method === 'POST') {
+      if (!this.config) {
+        this.config = {
+          id: PRACTICE_TABLE_ID, name: 'Practice Table', smallBlind: 10, practice: true,
+        };
+        await this.state.storage.put('config', this.config);
+      }
       return Response.json({ ok: true });
     }
 
@@ -197,6 +223,7 @@ export class TableDO implements DurableObject {
 
     const player = this.players.get(session.address);
     if (player) {
+      this.clearGrace(session.address);
       player.connected = true;
       player.handle = session.handle ?? player.handle;
       player.avatar = session.avatar ?? player.avatar;
@@ -213,7 +240,14 @@ export class TableDO implements DurableObject {
 
     // Greet with chat history + current state.
     for (const message of this.chatLog.slice(-30)) this.send(ws, { type: 'chat', message });
-    this.send(ws, { type: 'state', state: this.buildView(session.address) });
+    if (player) {
+      // A returning player un-greys for everyone, and may be the one the
+      // next hand was waiting on.
+      this.broadcast();
+      this.maybeStartHand();
+    } else {
+      this.send(ws, { type: 'state', state: this.buildView(session.address) });
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -260,13 +294,28 @@ export class TableDO implements DurableObject {
     const player = this.players.get(session.address);
     if (!player) return;
     player.connected = false;
-    if (!player.inHand || this.stage === 'waiting' || this.stage === 'showdown') {
-      // Not in a live hand — cash them out immediately.
-      void this.handleLeave(session.address);
-    }
-    // Otherwise they stay seated; the action timer will auto-fold them and
-    // they are cashed out at the end of the hand (see finishHand()).
+    // Phones drop the socket whenever the browser is backgrounded — switching
+    // to a wallet app, a notification, another tab. Hold the seat for a grace
+    // window instead of cashing out on the spot; a reconnect cancels it.
+    // Meanwhile they're dealt out of new hands, and in a live hand the action
+    // timer checks/folds for them.
+    //
+    // The window stays under the ~70s a Durable Object may sit idle before
+    // eviction, which would lose the in-memory stacks.
+    this.clearGrace(session.address);
+    this.graceTimers.set(session.address, setTimeout(() => {
+      this.graceTimers.delete(session.address);
+      if (this.players.get(session.address)?.connected === false) {
+        void this.handleLeave(session.address);
+      }
+    }, DISCONNECT_GRACE_MS));
     this.broadcast();
+  }
+
+  private clearGrace(address: string) {
+    const t = this.graceTimers.get(address);
+    if (t) clearTimeout(t);
+    this.graceTimers.delete(address);
   }
 
   /* ------------------------------------------------------------------ */
@@ -283,6 +332,7 @@ export class TableDO implements DurableObject {
    * size — down to heads-up for a 2-seat game between friends.
    */
   private get minToStart() {
+    if (this.config?.practice) return MIN_PLAYERS;
     return this.config?.isPrivate ? Math.min(MIN_PLAYERS, this.maxSeats) : MIN_PLAYERS;
   }
 
@@ -312,24 +362,20 @@ export class TableDO implements DurableObject {
       return this.send(ws, { type: 'error', error: 'table full' });
     }
 
-    // Debit the buy-in from the player's persistent bankroll in D1.
-    // New wallets are auto-provisioned with the starting bankroll.
-    const db = this.env.DB;
-    await db.prepare(
-      `INSERT INTO players (address, handle, avatar, created_at) VALUES (?, ?, ?, ?)
-       ON CONFLICT(address) DO UPDATE SET
-         handle = COALESCE(excluded.handle, players.handle),
-         avatar = COALESCE(excluded.avatar, players.avatar)`,
-    ).bind(session.address, session.handle, session.avatar, Date.now()).run();
+    // Practice stacks are free — the bankroll is never touched.
+    if (!this.config!.practice && !(await this.debitBuyIn(ws, session))) return;
 
-    const debit = await db.prepare(
-      'UPDATE players SET bankroll = bankroll - ? WHERE address = ? AND bankroll >= ?',
-    ).bind(this.buyIn, session.address, this.buyIn).run();
-    if (!debit.meta.changes) {
-      return this.send(ws, {
-        type: 'error',
-        error: `Not enough chips for the ${this.buyIn.toLocaleString()} buy-in — claim your daily chips from your profile.`,
-      });
+    // The socket can close (or the seat fill) while D1 was answering. Seating
+    // them anyway leaves a "connected" player with no connection, who is then
+    // never cleaned up — refund and bail instead.
+    const gone = this.sockets.get(ws) !== session;
+    if (gone || this.players.has(session.address) || this.playerAtSeat(seat)) {
+      if (!this.config!.practice) {
+        await this.env.DB.prepare('UPDATE players SET bankroll = bankroll + ? WHERE address = ?')
+          .bind(this.buyIn, session.address).run().catch(() => { /* best-effort */ });
+      }
+      if (!gone) this.send(ws, { type: 'error', error: 'seat taken' });
+      return;
     }
 
     this.players.set(session.address, {
@@ -350,31 +396,67 @@ export class TableDO implements DurableObject {
 
     // Someone sat down — cancel any pending empty-table close.
     await this.state.storage.deleteAlarm().catch(() => { /* noop */ });
+    this.rebalanceBots();
     await this.syncLobbyCount();
     this.broadcast();
     this.maybeStartHand();
   }
 
+  /** Debit the buy-in from the player's persistent bankroll in D1. */
+  private async debitBuyIn(ws: WebSocket, session: Session): Promise<boolean> {
+    // New wallets are auto-provisioned with the starting bankroll.
+    const db = this.env.DB;
+    await db.prepare(
+      `INSERT INTO players (address, handle, avatar, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(address) DO UPDATE SET
+         handle = COALESCE(excluded.handle, players.handle),
+         avatar = COALESCE(excluded.avatar, players.avatar)`,
+    ).bind(session.address, session.handle, session.avatar, Date.now()).run();
+
+    const debit = await db.prepare(
+      'UPDATE players SET bankroll = bankroll - ? WHERE address = ? AND bankroll >= ?',
+    ).bind(this.buyIn, session.address, this.buyIn).run();
+    if (!debit.meta.changes) {
+      this.send(ws, {
+        type: 'error',
+        error: `Not enough chips for the ${this.buyIn.toLocaleString()} buy-in — claim your daily chips from your profile.`,
+      });
+      return false;
+    }
+    return true;
+  }
+
   private async handleLeave(address: string) {
     const player = this.players.get(address);
     if (!player) return;
+    this.clearGrace(address);
 
     if (player.inHand && this.stage !== 'waiting' && this.stage !== 'showdown') {
       // Leaving mid-hand forfeits the hand: fold now, cash out after.
-      if (!player.folded) this.applyFold(player);
-      player.connected = false;
+      player.leaving = true;
+      if (!player.folded) {
+        const wasActing = this.actingSeat === player.seat;
+        this.applyFold(player);
+        // Only move the turn if it was theirs — afterAction() hands the turn
+        // to the next seat, which would skip whoever is actually deciding.
+        if (wasActing) { this.afterAction(); return; }
+        const live = this.seatedPlayers().filter((p) => p.inHand && !p.folded);
+        if (live.length === 1) { this.afterAction(); return; }
+      }
       this.broadcast();
-      this.afterAction();
       return;
     }
 
     this.players.delete(address);
     // Return remaining stack to the persistent bankroll; net profit is the
     // difference vs. every buy-in, tracked per-hand in finishHand().
-    await this.env.DB.prepare('UPDATE players SET bankroll = bankroll + ? WHERE address = ?')
-      .bind(player.stack, address).run().catch(() => { /* stats are best-effort */ });
+    if (!this.config?.practice && !player.bot) {
+      await this.env.DB.prepare('UPDATE players SET bankroll = bankroll + ? WHERE address = ?')
+        .bind(player.stack, address).run().catch(() => { /* stats are best-effort */ });
+    }
+    this.rebalanceBots();
 
-    if (this.players.size === 0) {
+    if (this.humanCount() === 0) {
       // Last player gone — close the table after a grace window (so a quick
       // refresh or re-sit doesn't kill it). A DO alarm survives eviction,
       // unlike setTimeout.
@@ -388,7 +470,7 @@ export class TableDO implements DurableObject {
 
   /** Alarm = the empty-table grace window elapsed. Close the table for good. */
   async alarm() {
-    if (!this.config || this.players.size > 0) return;
+    if (!this.config || this.humanCount() > 0) return;
     await this.env.DB.prepare('DELETE FROM tables WHERE id = ?')
       .bind(this.config.id).run().catch(() => { /* re-swept by the lobby */ });
     // Tell any remaining spectators, then close without triggering the
@@ -413,7 +495,7 @@ export class TableDO implements DurableObject {
        ON CONFLICT(id) DO UPDATE SET seats = excluded.seats, status = excluded.status`,
     ).bind(
       this.config.id, this.config.name, this.config.smallBlind,
-      this.players.size, this.stage === 'waiting' ? 'waiting' : 'playing', Date.now(),
+      this.humanCount(), this.stage === 'waiting' ? 'waiting' : 'playing', Date.now(),
     ).run().catch(() => { /* best-effort */ });
   }
 
@@ -426,12 +508,71 @@ export class TableDO implements DurableObject {
     return [...this.players.values()].sort((a, b) => a.seat - b.seat);
   }
 
+  /** Players who get dealt in: chips, a live connection, not on their way out. */
+  private readyPlayers(): Player[] {
+    return this.seatedPlayers().filter((p) => p.stack > 0 && p.connected && !p.leaving);
+  }
+
+  /** A hand needs enough ready players — and at the practice table, a human. */
+  private canStart(): boolean {
+    const ready = this.readyPlayers();
+    if (ready.length < this.minToStart) return false;
+    return !this.config?.practice || ready.some((p) => !p.bot);
+  }
+
+  private humanCount(): number {
+    let n = 0;
+    for (const p of this.players.values()) if (!p.bot) n++;
+    return n;
+  }
+
+  /**
+   * Practice table: keep enough bots seated that a lone player gets a game,
+   * and step them aside as humans arrive. Only between hands — a bot never
+   * vanishes mid-hand. A player who dropped but is still inside the grace
+   * window counts as present, so bots don't churn while someone switches apps.
+   */
+  private rebalanceBots() {
+    if (!this.config?.practice || this.stage !== 'waiting') return;
+    const humans = this.humanCount();
+    const bots = this.seatedPlayers().filter((p) => p.bot);
+    const want = humans === 0 ? 0 : Math.max(0, MIN_PLAYERS - humans);
+
+    for (const bot of bots.slice(want)) this.players.delete(bot.address);
+    for (const bot of bots.slice(0, want)) {
+      if (bot.stack < this.bigBlind) bot.stack = this.buyIn; // house rebuy
+    }
+
+    for (let i = bots.length; i < want; i++) {
+      const taken = new Set([...this.players.values()].map((p) => p.seat));
+      const seat = BOT_SEAT_ORDER.find((s) => s < this.maxSeats && !taken.has(s));
+      if (seat === undefined) return;
+      const names = new Set([...this.players.values()].map((p) => p.handle));
+      const name = BOT_NAMES.find((n) => !names.has(n)) ?? `Bot ${seat + 1}`;
+      this.players.set(`bot:${seat}`, {
+        seat,
+        address: `bot:${seat}`,
+        handle: name,
+        avatar: null,
+        stack: this.buyIn,
+        streetBet: 0,
+        committed: 0,
+        folded: false,
+        allIn: false,
+        inHand: false,
+        holeCards: [],
+        acted: false,
+        connected: true,
+        bot: true,
+      });
+    }
+  }
+
   private maybeStartHand() {
     if (this.stage !== 'waiting' || this.nextHandTimer) return;
-    const ready = this.seatedPlayers().filter((p) => p.stack > 0);
     // PRODUCT RULE: public hands only start with 4+ seated players.
     // Private tables start once their (possibly smaller) size is met.
-    if (ready.length < this.minToStart) return;
+    if (!this.canStart()) return;
     this.nextHandTimer = setTimeout(() => {
       this.nextHandTimer = null;
       this.startHand();
@@ -439,8 +580,8 @@ export class TableDO implements DurableObject {
   }
 
   private startHand() {
-    const ready = this.seatedPlayers().filter((p) => p.stack > 0);
-    if (ready.length < this.minToStart || this.stage !== 'waiting') {
+    const ready = this.readyPlayers();
+    if (!this.canStart() || this.stage !== 'waiting') {
       this.broadcast();
       return;
     }
@@ -453,7 +594,7 @@ export class TableDO implements DurableObject {
     this.minRaise = this.bigBlind;
 
     for (const p of this.players.values()) {
-      const playing = p.stack > 0;
+      const playing = ready.includes(p);
       p.inHand = playing;
       p.folded = false;
       p.allIn = false;
@@ -521,9 +662,14 @@ export class TableDO implements DurableObject {
 
   private setActing(seat: number | null) {
     if (this.actionTimer) { clearTimeout(this.actionTimer); this.actionTimer = null; }
+    if (this.botTimer) { clearTimeout(this.botTimer); this.botTimer = null; }
     this.actingSeat = seat;
     if (seat === null) { this.actionDeadline = null; return; }
     this.actionDeadline = Date.now() + ACTION_SECONDS * 1000;
+    if (this.playerAtSeat(seat)?.bot) {
+      // A short, human-ish think before acting.
+      this.botTimer = setTimeout(() => this.botAct(seat), 900 + Math.random() * 1400);
+    }
     // Auto-act on timeout: check when free, otherwise fold. Keeps games
     // moving when someone disconnects or falls asleep.
     this.actionTimer = setTimeout(() => {
@@ -616,6 +762,27 @@ export class TableDO implements DurableObject {
     if (!forced) this.pokeSound(); // (reserved hook — sounds are client-side)
     this.afterAction();
     return null;
+  }
+
+  private botAct(seat: number) {
+    this.botTimer = null;
+    const p = this.playerAtSeat(seat);
+    if (!p?.bot || this.actingSeat !== seat || !p.inHand || p.folded || p.allIn) return;
+    const decision = decideBotAction({
+      hole: p.holeCards,
+      board: this.community,
+      stack: p.stack,
+      streetBet: p.streetBet,
+      currentBet: this.currentBet,
+      minRaise: this.minRaise,
+      pot: [...this.players.values()].reduce((s, x) => s + x.committed, 0),
+      bigBlind: this.bigBlind,
+      opponents: this.seatedPlayers().filter((x) => x !== p && x.inHand && !x.folded).length,
+    });
+    // The table is the authority: an illegal pick falls back to check/fold.
+    if (this.performAction(p, decision.action, decision.amount, false)) {
+      this.performAction(p, p.streetBet === this.currentBet ? 'check' : 'fold', undefined, true);
+    }
   }
 
   private applyFold(p: Player) {
@@ -758,6 +925,7 @@ export class TableDO implements DurableObject {
 
   /** Update leaderboard stats in D1 — best-effort, never blocks gameplay. */
   private async persistHandStats(shares: { seat: number; amount: number }[]) {
+    if (this.config?.practice) return; // practice hands never reach the leaderboard
     try {
       const potTotal = shares.reduce((s, x) => s + x.amount, 0);
       const stmts = [];
@@ -792,8 +960,14 @@ export class TableDO implements DurableObject {
       p.committed = 0;
       p.folded = false;
       p.allIn = false;
-      if (!p.connected || p.stack === 0) await this.handleLeave(p.address);
+      if (p.bot) continue; // rebalanceBots() rebuys or retires them
+      if (this.config?.practice && p.stack === 0 && !p.leaving) {
+        p.stack = this.buyIn; // practice chips are free — top up instead of busting out
+        continue;
+      }
+      if (p.leaving || p.stack === 0) await this.handleLeave(p.address);
     }
+    this.rebalanceBots();
     this.broadcast();
     this.maybeStartHand();
   }
@@ -817,10 +991,11 @@ export class TableDO implements DurableObject {
       connected: p.connected,
       acting: this.actingSeat === p.seat,
       isButton: this.buttonSeat === p.seat,
+      bot: p.bot || undefined,
       shownCards: reveals?.get(p.seat),
     }));
     const pot = [...this.players.values()].reduce((s, p) => s + p.committed, 0);
-    const readyCount = this.seatedPlayers().filter((p) => p.stack > 0).length;
+    const readyCount = this.readyPlayers().length;
     return {
       id: cfg.id,
       name: cfg.name,
@@ -843,6 +1018,7 @@ export class TableDO implements DurableObject {
       isPrivate: !!cfg.isPrivate,
       canSit: forAddress ? this.isAllowedToSit(forAddress) : !cfg.isPrivate,
       whitelist: cfg.isPrivate ? cfg.whitelist : undefined,
+      practice: !!cfg.practice,
     };
   }
 

@@ -31,12 +31,12 @@ export function Seat({
     return onSit ? (
       <button
         onClick={onSit}
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-acid-400/40 bg-night-950/60 px-2.5 py-1.5 text-[11px] text-acid/80 backdrop-blur-sm transition-colors hover:border-acid-400/80 hover:bg-acid-400/10 hover:text-acid sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13px]"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-acid-400/40 bg-night-950/60 px-2.5 py-1.5 text-[11px] text-acid/80 backdrop-blur-sm transition-colors hover:border-acid-400/80 hover:bg-acid-400/10 hover:text-acid sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[13px] tilt:gap-1.5 tilt:px-2.5 tilt:py-1.5 tilt:text-[11px]"
       >
         <span className="text-base leading-none">+</span> Sit here
       </button>
     ) : (
-      <div className="h-8 w-8 rounded-full border border-dashed border-white/15 bg-night-950/40 sm:h-10 sm:w-10" />
+      <div className="h-8 w-8 rounded-full border border-dashed border-white/15 bg-night-950/40 sm:h-10 sm:w-10 tilt:h-7 tilt:w-7" />
     );
   }
 
@@ -48,7 +48,7 @@ export function Seat({
       {/* Player pill — sits on top of the seat; cards hang below, over the felt */}
       <div
         className={cn(
-          'relative flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-md sm:gap-2.5 sm:py-1.5 sm:pl-1.5 sm:pr-4',
+          'relative flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.5)] backdrop-blur-md sm:gap-2.5 sm:py-1.5 sm:pl-1.5 sm:pr-4 tilt:gap-1.5 tilt:py-1 tilt:pl-1 tilt:pr-2.5',
           view.acting
             ? 'animate-pulse border-acid-400 bg-night-950/75'
             : isYou
@@ -62,20 +62,25 @@ export function Seat({
           handle={view.handle}
           address={view.address}
           size={48}
-          className="h-7 w-7 border-2 border-acid/50 sm:h-[42px] sm:w-[42px] md:h-[48px] md:w-[48px]"
-          monogramClassName="text-[13px] sm:text-[18px]"
+          className="h-7 w-7 border-2 border-acid/50 sm:h-[42px] sm:w-[42px] md:h-[48px] md:w-[48px] tilt:h-7 tilt:w-7"
+          monogramClassName="text-[13px] sm:text-[18px] tilt:text-[13px]"
         />
         <div className="min-w-0 text-left">
-          <p className="max-w-[72px] truncate text-[10.5px] font-semibold text-cream sm:max-w-32 sm:text-[13px] md:max-w-40 md:text-[14px]">
+          <p className="max-w-[72px] truncate text-[10.5px] font-semibold text-cream sm:max-w-32 sm:text-[13px] md:max-w-40 md:text-[14px] tilt:max-w-[84px] tilt:text-[10.5px]">
             {isYou ? 'You · ' : ''}
             {displayName(view.handle, view.address)}
           </p>
-          <p className="font-mono text-[10px] tabular-nums text-acid sm:text-[12px] md:text-[12.5px]">
+          <p className="font-mono text-[10px] tabular-nums text-acid sm:text-[12px] md:text-[12.5px] tilt:text-[10px]">
             {formatChips(view.stack)}
           </p>
         </div>
+        {view.bot && (
+          <span className="absolute -left-1 -top-1.5 rounded-full border border-acid/40 bg-night-950 px-1.5 font-mono text-[8px] font-semibold uppercase leading-[14px] tracking-[0.1em] text-acid">
+            Bot
+          </span>
+        )}
         {view.isButton && (
-          <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-cream text-[9px] font-bold text-night-950 shadow sm:h-6 sm:w-6 sm:text-[10px]">
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-cream text-[9px] font-bold text-night-950 shadow sm:h-6 sm:w-6 sm:text-[10px] tilt:h-5 tilt:w-5 tilt:text-[9px]">
             D
           </span>
         )}
@@ -94,12 +99,12 @@ export function Seat({
         <div className="flex gap-1">
           {showCards?.length ? (
             showCards.map((c, i) => (
-              <PlayingCard key={i} card={c} size="sm" className="h-8 w-[22px] text-[10px] sm:h-10 sm:w-7 sm:text-xs" />
+              <PlayingCard key={i} card={c} size="sm" className="h-8 w-[22px] text-[10px] sm:h-10 sm:w-7 sm:text-xs tilt:h-8 tilt:w-[22px] tilt:text-[10px]" />
             ))
           ) : (
             <>
-              <PlayingCard size="sm" faceDown className="h-8 w-[22px] sm:h-10 sm:w-7" />
-              <PlayingCard size="sm" faceDown className="h-8 w-[22px] sm:h-10 sm:w-7" />
+              <PlayingCard size="sm" faceDown className="h-8 w-[22px] sm:h-10 sm:w-7 tilt:h-8 tilt:w-[22px]" />
+              <PlayingCard size="sm" faceDown className="h-8 w-[22px] sm:h-10 sm:w-7 tilt:h-8 tilt:w-[22px]" />
             </>
           )}
         </div>
@@ -107,7 +112,7 @@ export function Seat({
 
       {/* Current street bet, displayed as chips in front of the seat */}
       {view.bet > 0 && (
-        <span className="rounded-full border border-acid-400/30 bg-night-950/80 px-2 py-0.5 font-mono text-[10px] tabular-nums text-acid sm:px-2.5 sm:text-[11.5px]">
+        <span className="rounded-full border border-acid-400/30 bg-night-950/80 px-2 py-0.5 font-mono text-[10px] tabular-nums text-acid sm:px-2.5 sm:text-[11.5px] tilt:px-2 tilt:text-[10px]">
           {formatChips(view.bet)}
         </span>
       )}
@@ -126,7 +131,7 @@ function TimerBar({ deadline }: { deadline: number }) {
     return () => clearInterval(id);
   }, [deadline]);
   return (
-    <div className="h-1 w-20 overflow-hidden rounded-full bg-night-800/90 sm:w-28">
+    <div className="h-1 w-20 overflow-hidden rounded-full bg-night-800/90 sm:w-28 tilt:w-20">
       <div
         className={cn('h-full transition-all', pct < 30 ? 'bg-red-500' : 'bg-acid-400')}
         style={{ width: `${pct}%` }}

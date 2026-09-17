@@ -5,6 +5,14 @@
  * Handles: auth handshake params, auto-reconnect with backoff, sound
  * effects derived from state transitions, chat log, and typed send
  * helpers for every player intent.
+ *
+ * Phones are the hard case. Switching to a wallet app (or any app) suspends
+ * the page and the OS kills its socket — sometimes without a close event, so
+ * the page comes back holding a socket that reads OPEN but is dead. So on
+ * returning to the foreground we reconnect at once instead of waiting out a
+ * backoff, and a heartbeat catches the zombie. The server holds a dropped
+ * player's seat for a grace window; if they were gone longer than that, we
+ * sit them back down.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WORKER_WS_URL } from './config';
@@ -37,6 +45,8 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
   const prevState = useRef<TableView | null>(null);
   const retries = useRef(0);
   const closedByUs = useRef(false);
+  /** Seat we hold (or last held) — cleared by an explicit Leave. */
+  const wantSeat = useRef<number | null>(null);
 
   /** Diff old vs. new state to trigger the right sound effect. */
   const playTransitionSounds = useCallback((next: TableView) => {
@@ -57,6 +67,26 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
 
     let ws: WebSocket;
     let reconnectTimer: ReturnType<typeof setTimeout>;
+    let pongTimer: ReturnType<typeof setTimeout> | undefined;
+    /** First state after a REconnect may need the seat taken back. */
+    let reseatCheck = false;
+    let everOpened = false;
+
+    // Survives a reload, but only briefly: coming back to a table hours later
+    // shouldn't buy you straight back in.
+    const seatKey = `epoker:seat:${tableId}:${identity.address}`;
+    try {
+      const [seat, ts] = (sessionStorage.getItem(seatKey) ?? '').split(':').map(Number);
+      if (Number.isInteger(seat) && Date.now() - ts < 10 * 60_000) wantSeat.current = seat;
+    } catch { /* storage blocked */ }
+
+    /** Drop the current socket without triggering its own reconnect. */
+    const discard = () => {
+      if (!ws) return;
+      ws.onopen = ws.onmessage = ws.onclose = null;
+      try { ws.close(); } catch { /* already dead */ }
+      clearTimeout(pongTimer);
+    };
 
     const connect = () => {
       const params = new URLSearchParams({
@@ -72,14 +102,35 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
         retries.current = 0;
         setConnected(true);
         setError(null);
+        // A page reload counts too: sessionStorage remembers the seat.
+        reseatCheck = everOpened || wantSeat.current !== null;
+        everOpened = true;
       };
 
       ws.onmessage = (evt) => {
         const msg = JSON.parse(evt.data) as ServerMessage;
         switch (msg.type) {
-          case 'state':
-            playTransitionSounds(msg.state);
-            setState(msg.state);
+          case 'state': {
+            const st = msg.state;
+            if (st.yourSeat !== null) {
+              wantSeat.current = st.yourSeat;
+              try { sessionStorage.setItem(seatKey, `${st.yourSeat}:${Date.now()}`); } catch { /* noop */ }
+            } else if (reseatCheck && wantSeat.current !== null && st.canSit) {
+              // Away longer than the server's grace window: take a seat again,
+              // the same one if it's still free.
+              const taken = new Set(st.seats.map((s) => s.seat));
+              const seat = !taken.has(wantSeat.current)
+                ? wantSeat.current
+                : Array.from({ length: st.maxPlayers }, (_, i) => i).find((i) => !taken.has(i));
+              if (seat !== undefined) ws.send(JSON.stringify({ type: 'sit', seat }));
+            }
+            reseatCheck = false;
+            playTransitionSounds(st);
+            setState(st);
+            break;
+          }
+          case 'pong':
+            clearTimeout(pongTimer);
             break;
           case 'chat':
             setChat((c) => [...c.slice(-99), msg.message]);
@@ -99,18 +150,50 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
         setConnected(false);
         wsRef.current = null;
         // 4000 = replaced by a newer tab; don't fight over the seat.
+        clearTimeout(pongTimer);
         if (closedByUs.current || evt.code === 4000) return;
         const delay = Math.min(1000 * 2 ** retries.current, 10_000);
         retries.current++;
+        clearTimeout(reconnectTimer);
         reconnectTimer = setTimeout(connect, delay);
       };
     };
 
+    /** Ping; a socket that doesn't answer in time is replaced. */
+    const probe = () => {
+      if (ws?.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: 'ping' }));
+      clearTimeout(pongTimer);
+      pongTimer = setTimeout(() => {
+        discard();
+        setConnected(false);
+        connect();
+      }, 5000);
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || closedByUs.current) return;
+      if (ws?.readyState === WebSocket.OPEN) return probe();
+      // Closed or stuck connecting after a suspend: go now, not after backoff.
+      clearTimeout(reconnectTimer);
+      retries.current = 0;
+      discard();
+      connect();
+    };
+
     connect();
+    const heartbeat = setInterval(probe, 25_000);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onVisible);
+    window.addEventListener('online', onVisible);
     return () => {
       closedByUs.current = true;
       clearTimeout(reconnectTimer);
-      ws?.close();
+      clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+      window.removeEventListener('online', onVisible);
+      discard();
     };
   }, [tableId, identity?.address, identity?.sig]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -127,7 +210,13 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
     connected,
     clearError: () => setError(null),
     sit: (seat: number) => sendMsg({ type: 'sit', seat }),
-    leave: () => sendMsg({ type: 'leave' }),
+    leave: () => {
+      wantSeat.current = null;
+      try {
+        if (tableId && identity) sessionStorage.removeItem(`epoker:seat:${tableId}:${identity.address}`);
+      } catch { /* noop */ }
+      sendMsg({ type: 'leave' });
+    },
     act: (action: ActionType, amount?: number) => sendMsg({ type: 'action', action, amount }),
     say: (text: string) => sendMsg({ type: 'chat', text }),
   };

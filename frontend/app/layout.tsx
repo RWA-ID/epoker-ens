@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { SITE_URL } from '@/lib/seo';
 import { Archivo, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/Providers';
@@ -27,10 +28,22 @@ const mono = IBM_Plex_Mono({
   variable: '--font-mono',
 });
 
+// Per-page title, description and share card come from lib/seo.ts. Icons
+// live in public/ (not app/) so the build never decodes the hand-built ICO.
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: 'HoodPoker — free Texas Hold’em on Robinhood Chain',
-  description:
-    'No tokens to hold. No buy-ins. No real value — just the fastest free poker table on Robinhood Chain. Grab a seat, stack virtual chips, and run up the leaderboard.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: { url: '/apple-touch-icon.png', type: 'image/png', sizes: '180x180' },
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#050505',
 };
 
 /** The project's only social account. */

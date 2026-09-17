@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import { TILT_QUERY } from './lib/tilt-query';
 
 /**
  * HoodPoker design tokens — values taken verbatim from the design handoff
@@ -17,6 +18,10 @@ const config: Config = {
       md: '768px',
       lg: '1024px',
       xl: '1280px',
+      // "Tilt mode": a phone held sideways. Declared LAST so its utilities
+      // come after sm/md in the CSS and win — a landscape phone is 700–930px
+      // wide, which would otherwise pick up desktop-sized seats.
+      tilt: { raw: TILT_QUERY },
     },
     extend: {
       colors: {

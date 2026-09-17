@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import { LegalPage, Clause, List, Callout } from '@/components/Legal';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Disclaimer — HoodPoker',
   description:
     'HoodPoker is a free play-chip game. No wagering, no payouts, no token, and no affiliation with Robinhood Markets, Inc.',
-};
+  path: '/disclaimer/',
+});
 
 export default function DisclaimerPage() {
   return (

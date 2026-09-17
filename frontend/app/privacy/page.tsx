@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import { LegalPage, Clause, List, Callout } from '@/components/Legal';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Privacy Policy — HoodPoker',
   description:
     'What HoodPoker stores: a wallet address, a handle and your chip stats. No email, no password, no cookies, no analytics.',
-};
+  path: '/privacy/',
+});
 
 export default function PrivacyPage() {
   return (

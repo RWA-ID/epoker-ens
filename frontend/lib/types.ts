@@ -23,6 +23,8 @@ export interface SeatView {
   connected: boolean;
   acting: boolean;
   isButton: boolean;
+  /** A house bot (practice table only). */
+  bot?: boolean;
   shownCards?: Card[];
 }
 
@@ -51,6 +53,8 @@ export interface TableView {
   canSit: boolean;
   /** Guest list — only present on private tables. */
   whitelist?: WhitelistEntry[];
+  /** Practice table: bots fill empty seats, no bankroll or leaderboard. */
+  practice?: boolean;
 }
 
 /** One invited player on a private table's guest list. */
@@ -96,6 +100,8 @@ export interface LobbyTable {
   seats: number;
   status: 'waiting' | 'playing';
   createdAt: number;
+  /** The always-on practice table against house bots. */
+  practice?: boolean;
 }
 
 export interface PlayerProfile {

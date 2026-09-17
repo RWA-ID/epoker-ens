@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "db:local": "wrangler d1 execute epoker --file=schema.sql --local",
     "db:remote": "wrangler d1 execute epoker --file=schema.sql --remote",
-    "test": "node --experimental-strip-types test/chat.test.mts"
+    "test": "node --experimental-strip-types test/chat.test.mts",
+    "test:table": "esbuild test/table.test.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/table.test.mjs && node node_modules/.cache/table.test.mjs"
   },
   "dependencies": {
     "viem": "^2.21.0"

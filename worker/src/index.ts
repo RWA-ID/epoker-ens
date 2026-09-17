@@ -2,7 +2,8 @@
  * Hoodpoker — Cloudflare Worker entry point.
  *
  * Routes:
- *   GET  /tables                 list open tables (lobby — public tables only)
+ *   GET  /tables                 list open tables (lobby — public tables only;
+ *                                the always-on practice table is pinned first)
  *   POST /tables                 create a table (auth)
  *                                { name, smallBlind, isPrivate?, maxPlayers?, whitelist? }
  *                                Private tables are unlisted (share the link) and
@@ -19,7 +20,7 @@
  */
 import type { Env } from './env';
 import { verifyAuth } from './auth';
-import { MAX_PLAYERS, WhitelistEntry } from './poker/types';
+import { MAX_PLAYERS, PRACTICE_TABLE_ID, WhitelistEntry } from './poker/types';
 
 export { TableDO } from './table';
 
@@ -66,8 +67,19 @@ export default {
         const { results } = await env.DB.prepare(
           `SELECT id, name, small_blind AS smallBlind, seats, status, created_at AS createdAt
            FROM tables ORDER BY seats DESC, created_at DESC LIMIT 50`,
-        ).all();
-        return json({ tables: results });
+        ).all<Record<string, unknown>>();
+        // The practice table is always open, even with nobody at it (its row
+        // only exists while someone is seated).
+        const practice = results.find((t) => t.id === PRACTICE_TABLE_ID) ?? {
+          id: PRACTICE_TABLE_ID, name: 'Practice Table', smallBlind: 10,
+          seats: 0, status: 'waiting', createdAt: 0,
+        };
+        return json({
+          tables: [
+            { ...practice, practice: true },
+            ...results.filter((t) => t.id !== PRACTICE_TABLE_ID),
+          ],
+        });
       }
 
       if (path === '/tables' && request.method === 'POST') {
@@ -132,6 +144,9 @@ export default {
           if (!address) return json({ error: 'unauthorized' }, 401);
         }
         const stub = env.TABLES.get(env.TABLES.idFromName(id));
+        if (id === PRACTICE_TABLE_ID) {
+          await stub.fetch('https://do/ensure-practice', { method: 'POST' });
+        }
         return stub.fetch(request);
       }
 

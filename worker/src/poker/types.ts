@@ -28,6 +28,8 @@ export interface SeatView {
   acting: boolean;
   /** Dealer button indicator. */
   isButton: boolean;
+  /** A house bot (practice table only). */
+  bot?: boolean;
   /** Revealed hole cards — only present at showdown. */
   shownCards?: Card[];
 }
@@ -62,6 +64,8 @@ export interface TableView {
   canSit: boolean;
   /** Guest list — only present on private tables. */
   whitelist?: WhitelistEntry[];
+  /** Practice table: bots fill empty seats, no bankroll or leaderboard. */
+  practice?: boolean;
 }
 
 /** One invited player on a private table's guest list. */
@@ -113,5 +117,9 @@ export const MAX_PLAYERS = 9;
 export const ACTION_SECONDS = 30;
 /** Pause between hands so players can read the result. */
 export const INTERHAND_MS = 6000;
+/** The always-on table where house bots fill empty seats. */
+export const PRACTICE_TABLE_ID = 'practice';
+/** How long a dropped player keeps their seat (phones drop sockets on app switch). */
+export const DISCONNECT_GRACE_MS = 60_000;
 /** Buy-in is a fixed number of big blinds. */
 export const BUYIN_BB = 100;

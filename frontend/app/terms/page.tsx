@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import { LegalPage, Clause, List, Callout } from '@/components/Legal';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: 'Terms of Use — HoodPoker',
   description:
     'The rules for playing HoodPoker: eligibility, fair play, virtual chips, and the limits of what we promise.',
-};
+  path: '/terms/',
+});
 
 export default function TermsPage() {
   return (

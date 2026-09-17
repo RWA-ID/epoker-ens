@@ -78,7 +78,7 @@ export function PokerTable({
         />
 
         {/* Pot + community cards, over the cleared centre of the felt */}
-        <div className="absolute left-1/2 top-[57%] flex -translate-x-1/2 -translate-y-1/2 scale-[0.62] flex-col items-center gap-3 rounded-[20px] px-5 py-4 [background:radial-gradient(closest-side,rgba(4,6,2,0.82),rgba(4,6,2,0.15))] sm:scale-[0.8] md:scale-95">
+        <div className="absolute left-1/2 top-[57%] flex -translate-x-1/2 -translate-y-1/2 scale-[0.62] flex-col items-center gap-3 rounded-[20px] px-5 py-4 [background:radial-gradient(closest-side,rgba(4,6,2,0.82),rgba(4,6,2,0.15))] sm:scale-[0.8] md:scale-95 tilt:scale-[0.62]">
           {state.pot > 0 && (
             <div className="flex items-center gap-2 rounded-full border border-acid-400/40 bg-night-950/80 px-4 py-1.5">
               <span className="text-[13px] text-acid-400">◉</span>
@@ -97,22 +97,34 @@ export function PokerTable({
         </div>
 
         {/* Waiting overlay — the 4-player minimum is a core product rule */}
-        {state.stage === 'waiting' && (
+        {state.stage === 'waiting' && state.practice && state.yourSeat === null && (
           <div className="absolute inset-x-0 bottom-[16%] flex justify-center px-10">
-            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-4 py-2.5 text-center backdrop-blur-sm sm:px-6 sm:py-4">
+            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-4 py-2.5 text-center backdrop-blur-sm sm:px-6 sm:py-4 tilt:px-4 tilt:py-2.5">
+              <p className="hp-display hp-w85 text-sm text-cream sm:text-lg tilt:text-sm">
+                Take any seat — bots fill the rest
+              </p>
+              <p className="mt-1 hidden text-xs text-muted sm:block tilt:hidden">
+                Practice chips are free and never touch your bankroll or the leaderboard.
+              </p>
+            </div>
+          </div>
+        )}
+        {state.stage === 'waiting' && !(state.practice && state.yourSeat === null) && (
+          <div className="absolute inset-x-0 bottom-[16%] flex justify-center px-10">
+            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-4 py-2.5 text-center backdrop-blur-sm sm:px-6 sm:py-4 tilt:px-4 tilt:py-2.5">
               {state.waitingFor > 0 ? (
                 <>
-                  <p className="hp-display hp-w85 text-sm text-cream sm:text-lg">
+                  <p className="hp-display hp-w85 text-sm text-cream sm:text-lg tilt:text-sm">
                     Waiting for {state.waitingFor} more player{state.waitingFor === 1 ? '' : 's'}
                   </p>
-                  <p className="mt-1 hidden text-xs text-muted sm:block">
+                  <p className="mt-1 hidden text-xs text-muted sm:block tilt:hidden">
                     {state.isPrivate
                       ? `Hands start with ${state.minPlayers}+ seated — share the link with your guest list!`
                       : `Hands start with ${state.minPlayers}+ seated — invite friends by name!`}
                   </p>
                 </>
               ) : (
-                <p className="hp-display hp-w85 text-sm text-acid sm:text-lg">
+                <p className="hp-display hp-w85 text-sm text-acid sm:text-lg tilt:text-sm">
                   Shuffling up — dealing shortly…
                 </p>
               )}
@@ -130,7 +142,7 @@ export function PokerTable({
           <div
             key={seatIdx}
             className={cn(
-              'absolute z-10 -translate-y-[18px] sm:-translate-y-[24px]',
+              'absolute z-10 -translate-y-[18px] sm:-translate-y-[24px] tilt:-translate-y-[18px]',
               ANCHOR_CLASS[pos.anchor],
             )}
             style={{ left: pos.left, top: pos.top }}
