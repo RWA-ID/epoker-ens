@@ -32,8 +32,9 @@ database_id = "0acc384c-4925-4b2c-abcd-727c9201f40e"
 # Frontends allowed by CORS, the SIWE domain check and socket upgrades.
 ALLOWED_ORIGINS = "https://epoker.eth.limo,https://epoker.eth.link,https://hoodpoker.eth.limo,https://hoodpoker.eth.link,http://localhost:3000"
 # Transitional: accept the old static signature from the frontend pinned
-# before SIWE. Set to "0" (and redeploy) once epoker.eth points at a SIWE build.
-ALLOW_LEGACY_SIG = "1"
+# before SIWE. Closed 2026-09-17 once epoker.eth pointed at the SIWE pin
+# QmRPMCFViRwMtpgjjK6jdGoSSAp2HM8AM8hTC4d1kM3D73 — SIWE is now the only way in.
+ALLOW_LEGACY_SIG = "0"
 MAINNET_RPC = "https://ethereum-rpc.publicnode.com"
 
 # Rate limits (per key, per period in seconds — Cloudflare allows 10 or 60).
