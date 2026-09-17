@@ -54,6 +54,8 @@ export default function PrivacyPage() {
           We also store the public tables themselves: an id, a table name, the blind, the
           seat count and a status. Live game state — who is seated, the board, the pot — is
           held in the memory of the running table and is not archived once it closes.
+          Signing in briefly stores a random one-time code (a nonce), with no address attached;
+          it is deleted when used and expires after ten minutes.
         </p>
       </Clause>
 
@@ -64,7 +66,9 @@ export default function PrivacyPage() {
           closes. They are never written to our database and we keep no transcript.
         </Callout>
         <p>
-          Links are stripped from messages server-side before anyone sees them. Other players
+          The hand log (blinds, bets, folds, the board and who won) works the same way: the
+          recent lines live in the table&rsquo;s memory only. Links are stripped from messages
+          server-side before anyone sees them. Other players
           at the table do see what you type, and nothing stops them keeping their own copy.
         </p>
       </Clause>
@@ -76,13 +80,13 @@ export default function PrivacyPage() {
         </p>
         <List
           items={[
-            'Your sign-in signature, in sessionStorage — it disappears when you close the tab.',
-            'Which of your names you chose as a handle, and whether you muted the sounds, in localStorage.',
+            'Your sign-in session, in sessionStorage — it expires after 24 hours and disappears when you close the tab.',
+            'Which of your names you chose as a handle, whether you muted the sounds, and whether you rotate the full-screen table, in localStorage.',
             'Your wallet connection state, kept by the wallet library in localStorage and IndexedDB.',
           ]}
         />
         <p>
-          The Disconnect button clears the cached signature and resets that wallet session
+          The Disconnect button clears the cached session and resets that wallet session
           deliberately, rather than leaving a stale connection behind.
         </p>
       </Clause>
@@ -91,7 +95,8 @@ export default function PrivacyPage() {
         <p>
           The game backend runs on Cloudflare Workers, which processes ordinary request
           metadata — including your IP address — as part of delivering and protecting the
-          service. We do not build profiles from it, join it to your wallet address, or keep
+          service, including short-lived rate limits that stop one connection from flooding
+          sign-in or the tables. We do not build profiles from it, join it to your wallet address, or keep
           our own analytics on top of it.
         </p>
         <p>

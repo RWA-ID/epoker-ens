@@ -91,7 +91,7 @@ export function clearAllSignatures(): void {
     const doomed: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
-      if (key?.startsWith('epoker:sig:')) doomed.push(key);
+      if (key?.startsWith('epoker:sig:') || key?.startsWith('epoker:session:')) doomed.push(key);
     }
     for (const key of doomed) sessionStorage.removeItem(key);
   } catch {

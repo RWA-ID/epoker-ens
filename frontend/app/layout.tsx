@@ -5,6 +5,7 @@ import './globals.css';
 import { Providers } from '@/components/Providers';
 import { Header } from '@/components/Header';
 import { Mark } from '@/components/Mark';
+import { TipJar } from '@/components/TipJar';
 
 /**
  * Archivo variable, loaded WITH the `wdth` axis — the design leans on
@@ -118,6 +119,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 >
                   <XIcon />
                 </a>
+                <TipJar />
               </div>
               <div className="flex flex-wrap gap-x-11 gap-y-8">
                 {FOOTER_LINKS.map((col) => (

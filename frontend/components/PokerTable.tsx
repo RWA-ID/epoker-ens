@@ -8,8 +8,9 @@
  * the chairs in that photograph, so SEAT_POS is tied to this exact image —
  * swapping the art means re-measuring the positions.
  */
+import type { ReactNode } from 'react';
 import type { TableView, Card } from '@/lib/types';
-import { formatChips, cn } from '@/lib/utils';
+import { displayName, formatChips, cn } from '@/lib/utils';
 import { PlayingCard } from './PlayingCard';
 import { Seat } from './Seat';
 
@@ -59,9 +60,12 @@ const SEAT_LAYOUTS: Record<number, number[]> = {
 export function PokerTable({
   state,
   onSit,
+  children,
 }: {
   state: TableView;
   onSit: (seat: number) => void;
+  /** Overlays drawn inside the felt (status chips, toasts, hand result). */
+  children?: ReactNode;
 }) {
   const seatMap = new Map(state.seats.map((s) => [s.seat, s]));
   const inHand = state.stage !== 'waiting';
@@ -98,9 +102,9 @@ export function PokerTable({
 
         {/* Waiting overlay — the 4-player minimum is a core product rule */}
         {state.stage === 'waiting' && state.practice && state.yourSeat === null && (
-          <div className="absolute inset-x-0 bottom-[16%] flex justify-center px-10">
-            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-4 py-2.5 text-center backdrop-blur-sm sm:px-6 sm:py-4 tilt:px-4 tilt:py-2.5">
-              <p className="hp-display hp-w85 text-sm text-cream sm:text-lg tilt:text-sm">
+          <div className="absolute inset-x-0 top-[62%] flex -translate-y-1/2 justify-center px-[22%]">
+            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-3 py-2 text-center backdrop-blur-sm sm:px-6 sm:py-4 tilt:px-3 tilt:py-2">
+              <p className="hp-display hp-w85 text-[12px] text-cream sm:text-lg tilt:text-[12px]">
                 Take any seat — bots fill the rest
               </p>
               <p className="mt-1 hidden text-xs text-muted sm:block tilt:hidden">
@@ -110,11 +114,11 @@ export function PokerTable({
           </div>
         )}
         {state.stage === 'waiting' && !(state.practice && state.yourSeat === null) && (
-          <div className="absolute inset-x-0 bottom-[16%] flex justify-center px-10">
-            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-4 py-2.5 text-center backdrop-blur-sm sm:px-6 sm:py-4 tilt:px-4 tilt:py-2.5">
+          <div className="absolute inset-x-0 top-[62%] flex -translate-y-1/2 justify-center px-[22%]">
+            <div className="rounded-2xl border border-acid-400/25 bg-night-950/85 px-3 py-2 text-center backdrop-blur-sm sm:px-6 sm:py-4 tilt:px-3 tilt:py-2">
               {state.waitingFor > 0 ? (
                 <>
-                  <p className="hp-display hp-w85 text-sm text-cream sm:text-lg tilt:text-sm">
+                  <p className="hp-display hp-w85 text-[12px] text-cream sm:text-lg tilt:text-[12px]">
                     Waiting for {state.waitingFor} more player{state.waitingFor === 1 ? '' : 's'}
                   </p>
                   <p className="mt-1 hidden text-xs text-muted sm:block tilt:hidden">
@@ -122,15 +126,38 @@ export function PokerTable({
                       ? `Hands start with ${state.minPlayers}+ seated — share the link with your guest list!`
                       : `Hands start with ${state.minPlayers}+ seated — invite friends by name!`}
                   </p>
+                  {/* Guest list lives here, not above the felt, so it can't
+                      shove the table down and up as hands start and end. */}
+                  {state.isPrivate && !!state.whitelist?.length && (
+                    <div className="mt-2 hidden flex-wrap justify-center gap-1 sm:flex">
+                      {state.whitelist.map((g) => {
+                        const seated = state.seats.some((s) => s.address === g.address);
+                        return (
+                          <span
+                            key={g.address}
+                            className={cn(
+                              'rounded-full border px-2 py-0.5 font-mono text-[10.5px]',
+                              seated ? 'border-acid/40 bg-acid/10 text-acid' : 'border-cream/15 text-dim',
+                            )}
+                          >
+                            {displayName(g.handle, g.address)}
+                            {seated && ' ✓'}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </>
               ) : (
-                <p className="hp-display hp-w85 text-sm text-acid sm:text-lg tilt:text-sm">
+                <p className="hp-display hp-w85 text-[12px] text-acid sm:text-lg tilt:text-[12px]">
                   Shuffling up — dealing shortly…
                 </p>
               )}
             </div>
           </div>
         )}
+
+        {children}
       </div>
 
       {/* Seats, positioned over the chairs (outside the clipped image so pills

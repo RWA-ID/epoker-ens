@@ -1,14 +1,13 @@
 /**
- * Lightweight wallet authentication.
+ * LEGACY static-message sign-in — superseded by SIWE (src/session.ts).
  *
- * The client signs a static message once per session; the signature is
- * attached to state-changing requests and to the WebSocket upgrade.
- * Good enough for play chips — see README "Security notes" for the
- * production upgrade path (nonce + expiry, i.e. full SIWE).
+ * Still accepted only while ALLOW_LEGACY_SIG=1, so the frontend pinned before
+ * SIWE keeps working until epoker.eth points at the new build. The signature
+ * never expires and can be replayed; delete this file once the flag is off.
  */
 import { verifyMessage } from 'viem';
 
-/** Must match SIGN_IN_MESSAGE in frontend/lib/auth.ts exactly. */
+/** The message the pre-SIWE frontend signed. */
 export function signInMessage(address: string): string {
   return `Sign in to Hoodpoker\n\nWallet: ${address.toLowerCase()}\n\nThis signature only proves wallet ownership. It costs no gas, moves no funds, and grants no token approvals.`;
 }

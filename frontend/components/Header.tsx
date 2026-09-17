@@ -9,11 +9,11 @@
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAppKit } from '@reown/appkit/react';
 import { useIdentity } from '@/lib/identity';
 import { useConnect, useWallet } from '@/lib/wallet';
-import { clearSignature } from '@/lib/auth';
+import { clearSession } from '@/lib/auth';
 import { resetWalletSession } from '@/lib/session';
 import { displayName, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,33 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // The header wraps on phones, which drops the account button to the LEFT
+  // edge — a menu anchored `right-0` to it then opened half off-screen. Place
+  // it from the button's box instead, clamped inside the viewport.
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const place = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const gutter = 12;
+      const width = Math.min(240, window.innerWidth - gutter * 2);
+      const left = Math.min(
+        Math.max(gutter, rect.right - width),
+        window.innerWidth - width - gutter,
+      );
+      setMenuPos({ top: rect.bottom + 8, left, width });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, { passive: true });
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -59,13 +86,20 @@ export function Header() {
     const who = address;
     // Bounded inside useWallet — falling through to the local clear is the point.
     await disconnectWallet();
-    if (who) clearSignature(who);
+    if (who) clearSession(who);
     setBusy(false);
     setMenuOpen(false);
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-acid/[0.16] bg-night-950/[0.82] backdrop-blur-[14px]">
+    <header
+      className={cn(
+        'sticky top-0 z-50 border-b border-acid/[0.16] bg-night-950/[0.82] backdrop-blur-[14px]',
+        // The table page carries its own bar (Lobby, table name, controls);
+        // stacking the marketing nav on top of it wastes a third of a phone.
+        pathname?.startsWith('/table') && 'hidden lg:block',
+      )}
+    >
       <div className="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-5 px-[22px] py-[14px]">
         <Link href="/" aria-label="HoodPoker home">
           <Mark size={24} />
@@ -100,6 +134,7 @@ export function Header() {
           ) : isConnected && address ? (
             <div className="relative" ref={menuRef}>
               <button
+                ref={buttonRef}
                 onClick={() => setMenuOpen((o) => !o)}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
@@ -111,10 +146,11 @@ export function Header() {
                 </span>
               </button>
 
-              {menuOpen && (
+              {menuOpen && menuPos && (
                 <div
                   role="menu"
-                  className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-card border border-cream/[0.12] bg-night-900 shadow-[0_18px_44px_rgba(0,0,0,0.7)]"
+                  style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+                  className="fixed z-50 overflow-hidden rounded-card border border-cream/[0.12] bg-night-900 shadow-[0_18px_44px_rgba(0,0,0,0.7)]"
                 >
                   <div className="border-b border-cream/[0.08] px-4 py-3">
                     <p className="hp-display hp-w85 truncate text-[15px] text-cream">

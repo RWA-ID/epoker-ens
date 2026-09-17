@@ -9,7 +9,7 @@
  */
 import {
   Card, Stage, ClientMessage, ServerMessage, TableView, SeatView,
-  ChatMessage, HandResultShare, WhitelistEntry,
+  ChatMessage, HandResultShare, WhitelistEntry, HandLogEntry,
   MIN_PLAYERS, MAX_PLAYERS, ACTION_SECONDS, INTERHAND_MS, BUYIN_BB,
   PRACTICE_TABLE_ID, DISCONNECT_GRACE_MS,
 } from './poker/types';
@@ -19,10 +19,28 @@ import { evaluate7 } from './poker/evaluator';
 import { settlePots, Contributor } from './poker/pots';
 import type { Env } from './env';
 import { sanitizeChat } from './chat';
-import { verifyHandle } from './handle';
+import { cleanAvatar, verifyHandle, type VerifiedHandle } from './handle';
 
 /** How long a table may sit empty before it is closed and delisted. */
 const EMPTY_TABLE_CLOSE_MS = 60_000;
+
+/** Sockets per table (players + spectators). Past this, new upgrades get a 503. */
+const MAX_SOCKETS = 150;
+/** Largest client frame worth parsing; every legal message is far smaller. */
+const MAX_FRAME_BYTES = 1024;
+/**
+ * Per-socket rate limits, on the real clock. Exported so the simulation test
+ * (which compresses timers 200x) can relax them.
+ */
+export const SOCKET_LIMITS = {
+  /** Any message. A client this chatty is broken or hostile → closed. */
+  flood: { max: 40, windowMs: 5_000 },
+  /** Chat lines. Over it the line is dropped with a notice. */
+  chat: { max: 5, windowMs: 10_000 },
+};
+/** Hand log lines kept in memory and replayed to a new connection. */
+const LOG_KEEP = 80;
+const LOG_REPLAY = 40;
 
 /** Seat order bots take on the practice table — spread around the felt. */
 const BOT_SEAT_ORDER = [4, 2, 6, 0, 8, 3, 5, 1, 7];
@@ -55,6 +73,17 @@ interface Session {
   address: string;
   handle: string | null;
   avatar: string | null;
+  /** Recent message / chat timestamps, for the per-socket rate limits. */
+  msgTimes?: number[];
+  chatTimes?: number[];
+}
+
+/** Sliding-window limiter: records `now` and says whether it fits. */
+function allow(times: number[], limit: { max: number; windowMs: number }, now: number): boolean {
+  while (times.length && now - times[0] > limit.windowMs) times.shift();
+  if (times.length >= limit.max) return false;
+  times.push(now);
+  return true;
 }
 
 interface TableConfig {
@@ -91,6 +120,7 @@ export class TableDO implements DurableObject {
   private minRaise = 0;
 
   private chatLog: ChatMessage[] = [];
+  private handLog: HandLogEntry[] = [];
   private actionTimer: ReturnType<typeof setTimeout> | null = null;
   private nextHandTimer: ReturnType<typeof setTimeout> | null = null;
   private botTimer: ReturnType<typeof setTimeout> | null = null;
@@ -146,6 +176,10 @@ export class TableDO implements DurableObject {
       if (request.headers.get('Upgrade') !== 'websocket') {
         return new Response('expected websocket', { status: 426 });
       }
+      if (this.sockets.size >= MAX_SOCKETS) {
+        return new Response('table is at capacity', { status: 503 });
+      }
+      // Set by the router from the verified session token — not client input.
       const address = (url.searchParams.get('address') ?? '').toLowerCase();
       if (!/^0x[0-9a-f]{40}$/.test(address)) {
         return new Response('bad address', { status: 400 });
@@ -158,11 +192,15 @@ export class TableDO implements DurableObject {
       // player uses a name, not one on every table join — the public Robinhood
       // RPC throttles Workers, and a throttled read would otherwise silently
       // demote a legitimate player to a raw address.
+      //
+      // The avatar comes back from that same check, read on-chain for the
+      // verified name. A client-sent `avatar` param is ignored.
       const claimed = url.searchParams.get('name');
+      const verified = claimed ? await this.resolveHandle(address, claimed) : null;
       const session: Session = {
         address,
-        handle: claimed ? await this.resolveHandle(address, claimed) : null,
-        avatar: url.searchParams.get('avatar') || null,
+        handle: verified?.handle ?? null,
+        avatar: verified?.avatar ?? null,
       };
       const pair = new WebSocketPair();
       this.acceptSocket(pair[1], session);
@@ -178,33 +216,35 @@ export class TableDO implements DurableObject {
    * Re-verification matters: names are transferable, so a cached pass has a
    * TTL rather than being permanent.
    */
-  private async resolveHandle(address: string, claimed: string): Promise<string | null> {
+  private async resolveHandle(address: string, claimed: string): Promise<VerifiedHandle | null> {
     const name = claimed.trim().toLowerCase();
     if (!name) return null;
 
     const TTL = 6 * 3600 * 1000;
     try {
       const row = await this.env.DB.prepare(
-        'SELECT handle, handle_checked AS checked FROM players WHERE address = ?',
-      ).bind(address).first<{ handle: string | null; checked: number | null }>();
+        'SELECT handle, avatar, handle_checked AS checked FROM players WHERE address = ?',
+      ).bind(address).first<{ handle: string | null; avatar: string | null; checked: number | null }>();
 
       if (
         row?.handle === name &&
         typeof row.checked === 'number' &&
         Date.now() - row.checked < TTL
       ) {
-        return name;
+        return { handle: name, avatar: cleanAvatar(row.avatar) };
       }
     } catch {
       // Cache miss or pre-migration schema — fall through to the live check.
     }
 
-    const verified = await verifyHandle(address, name);
+    const verified = await verifyHandle(address, name, { mainnet: this.env.MAINNET_RPC });
     if (verified) {
       await this.env.DB.prepare(
-        `INSERT INTO players (address, handle, handle_checked, created_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT(address) DO UPDATE SET handle = excluded.handle, handle_checked = excluded.handle_checked`,
-      ).bind(address, verified, Date.now(), Date.now()).run().catch(() => { /* best-effort */ });
+        `INSERT INTO players (address, handle, avatar, handle_checked, created_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(address) DO UPDATE SET handle = excluded.handle, avatar = excluded.avatar,
+           handle_checked = excluded.handle_checked`,
+      ).bind(address, verified.handle, verified.avatar, Date.now(), Date.now())
+        .run().catch(() => { /* best-effort */ });
     }
     return verified;
   }
@@ -226,7 +266,7 @@ export class TableDO implements DurableObject {
       this.clearGrace(session.address);
       player.connected = true;
       player.handle = session.handle ?? player.handle;
-      player.avatar = session.avatar ?? player.avatar;
+      player.avatar = session.handle ? session.avatar : player.avatar;
     }
 
     ws.addEventListener('message', (evt) => {
@@ -238,8 +278,9 @@ export class TableDO implements DurableObject {
     ws.addEventListener('close', drop);
     ws.addEventListener('error', drop);
 
-    // Greet with chat history + current state.
+    // Greet with chat history, the recent hand log and current state.
     for (const message of this.chatLog.slice(-30)) this.send(ws, { type: 'chat', message });
+    for (const entry of this.handLog.slice(-LOG_REPLAY)) this.send(ws, { type: 'log', entry });
     if (player) {
       // A returning player un-greys for everyone, and may be the one the
       // next hand was waiting on.
@@ -255,12 +296,21 @@ export class TableDO implements DurableObject {
   /* ------------------------------------------------------------------ */
 
   private async onMessage(ws: WebSocket, session: Session, evt: MessageEvent) {
+    const now = Date.now();
+    if (!allow((session.msgTimes ??= []), SOCKET_LIMITS.flood, now)) {
+      try { ws.close(1008, 'rate limited'); } catch { /* noop */ }
+      return;
+    }
+    if (typeof evt.data !== 'string' || evt.data.length > MAX_FRAME_BYTES) {
+      return this.send(ws, { type: 'error', error: 'message too large' });
+    }
     let msg: ClientMessage;
     try {
-      msg = JSON.parse(evt.data as string);
+      msg = JSON.parse(evt.data);
     } catch {
       return this.send(ws, { type: 'error', error: 'invalid JSON' });
     }
+    if (!msg || typeof msg !== 'object') return;
 
     switch (msg.type) {
       case 'ping':
@@ -277,6 +327,9 @@ export class TableDO implements DurableObject {
         // only: links are stripped here, not just hidden in the client.
         const text = sanitizeChat(msg.text);
         if (!text) return;
+        if (!allow((session.chatTimes ??= []), SOCKET_LIMITS.chat, now)) {
+          return this.send(ws, { type: 'error', error: 'Slow down — too many messages.' });
+        }
         const message: ChatMessage = {
           address: session.address, handle: session.handle, text, ts: Date.now(),
         };
@@ -437,6 +490,7 @@ export class TableDO implements DurableObject {
       if (!player.folded) {
         const wasActing = this.actingSeat === player.seat;
         this.applyFold(player);
+        this.log(player, 'leaves · folds');
         // Only move the turn if it was theirs — afterAction() hands the turn
         // to the next seat, which would skip whoever is actually deciding.
         if (wasActing) { this.afterAction(); return; }
@@ -610,8 +664,11 @@ export class TableDO implements DurableObject {
     // Post blinds (short stacks post all-in for less).
     const sb = this.nextSeat(this.buttonSeat, ready)!;
     const bb = this.nextSeat(sb.seat, ready)!;
+    this.log(null, `Hand #${this.handNumber}`);
     this.commit(sb, Math.min(this.config!.smallBlind, sb.stack));
+    this.log(sb, 'posts SB', sb.streetBet);
     this.commit(bb, Math.min(this.bigBlind, bb.stack));
+    this.log(bb, 'posts BB', bb.streetBet);
     this.currentBet = this.bigBlind;
 
     // Two hole cards each, starting left of the button.
@@ -699,21 +756,26 @@ export class TableDO implements DurableObject {
    */
   private performAction(p: Player, action: string, amount: number | undefined, forced: boolean): string | null {
     const toCall = this.currentBet - p.streetBet;
+    const betBefore = this.currentBet;
+    let line = '';
 
     switch (action) {
       case 'fold':
         this.applyFold(p);
+        line = 'folds';
         break;
 
       case 'check':
         if (toCall > 0) return 'cannot check facing a bet';
         p.acted = true;
+        line = 'checks';
         break;
 
       case 'call': {
-        if (toCall <= 0) { p.acted = true; break; } // nothing to call → check
+        if (toCall <= 0) { p.acted = true; line = 'checks'; break; } // nothing to call → check
         this.commit(p, toCall); // commit() caps at stack (call all-in for less)
         p.acted = true;
+        line = p.allIn ? 'calls all-in' : 'calls';
         break;
       }
 
@@ -731,6 +793,7 @@ export class TableDO implements DurableObject {
           if (!isAllIn) return 'must exceed current bet';
           this.commit(p, chips);
           p.acted = true;
+          line = 'all-in';
           break;
         }
 
@@ -752,12 +815,16 @@ export class TableDO implements DurableObject {
         // so other players' `acted` flags are left untouched.
         this.currentBet = target;
         p.acted = true;
+        line = isAllIn ? 'all-in' : betBefore === 0 ? 'bets' : 'raises to';
         break;
       }
 
       default:
         return 'unknown action';
     }
+
+    const shown = line === 'folds' || line === 'checks' ? null : p.streetBet;
+    this.log(p, forced ? `times out · ${line}` : line, shown);
 
     if (!forced) this.pokeSound(); // (reserved hook — sounds are client-side)
     this.afterAction();
@@ -846,14 +913,17 @@ export class TableDO implements DurableObject {
       this.stage = 'flop';
       this.deck.pop(); // burn card (tradition — cosmetic with a CSPRNG shuffle)
       this.community.push(this.deck.pop()!, this.deck.pop()!, this.deck.pop()!);
+      this.log(null, 'Flop', null, this.community.slice(0, 3));
     } else if (this.stage === 'flop') {
       this.stage = 'turn';
       this.deck.pop();
       this.community.push(this.deck.pop()!);
+      this.log(null, 'Turn', null, this.community.slice(3, 4));
     } else if (this.stage === 'turn') {
       this.stage = 'river';
       this.deck.pop();
       this.community.push(this.deck.pop()!);
+      this.log(null, 'River', null, this.community.slice(4, 5));
     } else if (this.stage === 'river') {
       this.showdown();
     }
@@ -900,6 +970,7 @@ export class TableDO implements DurableObject {
         amount: share.amount, handName: hand?.name ?? null,
         cards: uncontested ? undefined : p.holeCards,
       });
+      this.log(p, hand ? `wins with ${hand.name}` : 'wins', share.amount, uncontested ? undefined : p.holeCards);
     }
     if (!uncontested) {
       // At showdown every unfolded player reveals.
@@ -1009,7 +1080,14 @@ export class TableDO implements DurableObject {
       community: this.community,
       pot,
       currentBet: this.currentBet,
-      minRaiseTo: this.currentBet + this.minRaise,
+      // Clamped to what THIS player can actually put in. A short stack can't
+      // reach the table's min raise; its only legal aggression is all-in, and
+      // performAction() accepts that target as a raise-for-less. Unclamped,
+      // a client that offers `minRaiseTo` as its min-raise button sends an
+      // amount the server then rejects as 'not enough chips'.
+      minRaiseTo: me
+        ? Math.min(this.currentBet + this.minRaise, me.streetBet + me.stack)
+        : this.currentBet + this.minRaise,
       seats,
       holeCards: me?.inHand ? me.holeCards : [],
       yourSeat: me ? me.seat : null,
@@ -1020,6 +1098,22 @@ export class TableDO implements DurableObject {
       whitelist: cfg.isPrivate ? cfg.whitelist : undefined,
       practice: !!cfg.practice,
     };
+  }
+
+  /** Append a hand-log line and push it to everyone watching. */
+  private log(p: Player | null, text: string, amount: number | null = null, cards?: Card[]) {
+    const entry: HandLogEntry = {
+      hand: this.handNumber,
+      address: p?.address ?? null,
+      handle: p?.handle ?? null,
+      text,
+      amount,
+      cards,
+      ts: Date.now(),
+    };
+    this.handLog.push(entry);
+    if (this.handLog.length > LOG_KEEP) this.handLog.shift();
+    for (const sock of this.sockets.keys()) this.send(sock, { type: 'log', entry });
   }
 
   private broadcast() { this.broadcastWithReveals(undefined); }

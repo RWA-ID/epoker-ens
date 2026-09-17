@@ -41,6 +41,7 @@ export interface TableView {
   community: Card[];
   pot: number;
   currentBet: number;
+  /** Smallest legal raise target *for you*, capped at your all-in. */
   minRaiseTo: number;
   seats: SeatView[];
   holeCards: Card[];
@@ -86,10 +87,24 @@ export type ClientMessage =
   | { type: 'chat'; text: string }
   | { type: 'ping' };
 
+/** One line of the hand log: an action, a blind, a street or a win. */
+export interface HandLogEntry {
+  hand: number;
+  /** The player the line is about; null for dealer lines (a new hand, a street). */
+  address: string | null;
+  handle: string | null;
+  /** "posts SB", "folds", "raises to", "wins with Two Pair", "Flop"… */
+  text: string;
+  amount: number | null;
+  cards?: Card[];
+  ts: number;
+}
+
 export type ServerMessage =
   | { type: 'state'; state: TableView }
   | { type: 'chat'; message: ChatMessage }
   | { type: 'handResult'; winners: HandResultShare[]; board: Card[] }
+  | { type: 'log'; entry: HandLogEntry }
   | { type: 'error'; error: string }
   | { type: 'pong' };
 

@@ -13,36 +13,58 @@
  *   GET  /leaderboard            top players by net play chips
  *   GET  /profile/:address       one player's stats + bankroll
  *   POST /claim                  daily free chips (auth)
+ *   GET  /auth/nonce             one-time SIWE nonce
+ *   POST /auth/verify            { message, signature } → { token, expiresAt }
  *
- * Auth = wallet signature over a static message (see src/auth.ts).
+ * Auth = Sign-In with Ethereum exchanged for a 24h session token (see
+ * src/session.ts), sent as `Authorization: Bearer` or `?token=` on sockets.
  * Play chips only: nothing here mints, transfers or redeems value.
  * Each table is a Durable Object (src/table.ts) that owns all game state.
  */
-import type { Env } from './env';
+import type { Env, RateLimiter } from './env';
 import { verifyAuth } from './auth';
+import { issueNonce, issueToken, isAllowedOrigin, verifySiwe, verifyToken } from './session';
 import { MAX_PLAYERS, PRACTICE_TABLE_ID, WhitelistEntry } from './poker/types';
 
 export { TableDO } from './table';
 
-const CORS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,X-Address,X-Signature',
-};
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
-  });
+/** CORS for an allowed origin only — anything else gets no ACAO header. */
+function corsHeaders(env: Env, request: Request): Record<string, string> {
+  const origin = request.headers.get('Origin');
+  const headers: Record<string, string> = { Vary: 'Origin' };
+  if (isAllowedOrigin(env, origin)) {
+    headers['Access-Control-Allow-Origin'] = origin!;
+    headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS';
+    headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Address,X-Signature';
+    headers['Access-Control-Max-Age'] = '86400';
+  }
+  return headers;
 }
 
-/** Verify the wallet signature carried in headers (or query for WS). */
-async function requireAuth(request: Request, url: URL): Promise<string | null> {
+/**
+ * The caller's verified address, or null.
+ * Session token first; the static signature only while ALLOW_LEGACY_SIG=1.
+ */
+async function requireAuth(request: Request, url: URL, env: Env): Promise<string | null> {
+  const bearer = request.headers.get('Authorization')?.match(/^Bearer\s+(\S+)$/)?.[1];
+  const token = bearer ?? url.searchParams.get('token');
+  if (token) return verifyToken(env, token);
+
+  if (env.ALLOW_LEGACY_SIG !== '1') return null;
   const address = (request.headers.get('X-Address') ?? url.searchParams.get('address') ?? '').toLowerCase();
   const signature = request.headers.get('X-Signature') ?? url.searchParams.get('sig') ?? '';
   if (!/^0x[0-9a-f]{40}$/.test(address) || !signature) return null;
   return (await verifyAuth(address, signature)) ? address : null;
+}
+
+/** True when allowed (or when the limiter isn't bound, e.g. in tests). */
+async function underLimit(limiter: RateLimiter | undefined, key: string): Promise<boolean> {
+  if (!limiter) return true;
+  try {
+    return (await limiter.limit({ key })).success;
+  } catch {
+    return true; // a limiter outage must not take the game down
+  }
 }
 
 /** Daily chip claim amount. */
@@ -52,10 +74,34 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+    const cors = corsHeaders(env, request);
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
 
-    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
     try {
+      /* ---------------- Sign-in ---------------- */
+
+      if (path === '/auth/nonce' && request.method === 'GET') {
+        if (!(await underLimit(env.AUTH_LIMITER, `nonce:${ip}`))) return json({ error: 'slow down' }, 429);
+        return json({ nonce: await issueNonce(env) });
+      }
+
+      if (path === '/auth/verify' && request.method === 'POST') {
+        if (!(await underLimit(env.AUTH_LIMITER, `verify:${ip}`))) return json({ error: 'slow down' }, 429);
+        const body = (await request.json().catch(() => ({}))) as { message?: string; signature?: string };
+        const result = await verifySiwe(
+          env, String(body.message ?? ''), String(body.signature ?? ''), request.headers.get('Origin'),
+        );
+        if (!result.ok) return json({ error: result.error }, 401);
+        return json(await issueToken(env, result.address));
+      }
+
       /* ---------------- Lobby ---------------- */
 
       if (path === '/tables' && request.method === 'GET') {
@@ -83,8 +129,11 @@ export default {
       }
 
       if (path === '/tables' && request.method === 'POST') {
-        const address = await requireAuth(request, url);
+        const address = await requireAuth(request, url, env);
         if (!address) return json({ error: 'unauthorized' }, 401);
+        if (!(await underLimit(env.CREATE_LIMITER, address))) {
+          return json({ error: 'Too many tables at once — try again in a minute.' }, 429);
+        }
 
         const body = (await request.json().catch(() => ({}))) as {
           name?: string;
@@ -138,16 +187,32 @@ export default {
       const tableMatch = path.match(/^\/table\/([a-zA-Z0-9-]+)\/(ws|state)$/);
       if (tableMatch) {
         const [, id, sub] = tableMatch;
-        if (sub === 'ws') {
-          // WebSockets can't send headers from the browser → auth via query.
-          const address = await requireAuth(request, url);
-          if (!address) return json({ error: 'unauthorized' }, 401);
-        }
         const stub = env.TABLES.get(env.TABLES.idFromName(id));
         if (id === PRACTICE_TABLE_ID) {
           await stub.fetch('https://do/ensure-practice', { method: 'POST' });
         }
-        return stub.fetch(request);
+        if (sub === 'state') return stub.fetch(request);
+
+        // WebSocket upgrades ignore CORS, so a hostile page could otherwise
+        // open a socket with a victim's credentials (cross-site WebSocket
+        // hijacking). Browsers always send Origin; non-browser clients still
+        // need a valid token.
+        const origin = request.headers.get('Origin');
+        if (origin && !isAllowedOrigin(env, origin)) return json({ error: 'origin not allowed' }, 403);
+        if (!(await underLimit(env.SOCKET_LIMITER, `ws:${ip}`))) return json({ error: 'slow down' }, 429);
+
+        // WebSockets can't send headers from the browser → auth via query.
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+
+        // The DO trusts `address`, so it is set HERE from the verified
+        // credential — never passed through from the client — and the
+        // credential itself is stripped.
+        const forward = new URL(request.url);
+        forward.searchParams.delete('token');
+        forward.searchParams.delete('sig');
+        forward.searchParams.set('address', address);
+        return stub.fetch(new Request(forward, request));
       }
 
       /* ---------------- Leaderboard & profiles ---------------- */
@@ -176,7 +241,7 @@ export default {
       /* ---------------- Daily chips ---------------- */
 
       if (path === '/claim' && request.method === 'POST') {
-        const address = await requireAuth(request, url);
+        const address = await requireAuth(request, url, env);
         if (!address) return json({ error: 'unauthorized' }, 401);
 
         await env.DB.prepare(
@@ -196,7 +261,9 @@ export default {
 
       return json({ error: 'not found' }, 404);
     } catch (err) {
-      return json({ error: `internal error: ${String(err)}` }, 500);
+      // Details go to the log (wrangler tail), never to the client.
+      console.error('request failed', path, err);
+      return json({ error: 'internal error' }, 500);
     }
   },
 };

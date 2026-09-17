@@ -64,8 +64,9 @@ export default function TermsPage() {
       <Clause n={4} title="Your wallet is your account">
         <p>
           There is no signup, no password and no account recovery. Your identity is the wallet
-          address you connect, and your one-time signature proves you control it. That
-          signature costs no gas, moves no funds and grants no token approvals.
+          address you connect, and a Sign-In with Ethereum signature proves you control it for
+          the next 24 hours. That signature costs no gas, moves no funds and grants no token
+          approvals.
         </p>
         <List
           items={[
@@ -76,8 +77,10 @@ export default function TermsPage() {
         />
         <Callout>
           HoodPoker will never ask you to approve a token, send a transaction, or sign
-          anything other than the plain-text sign-in message shown in your wallet. Anything
-          else claiming to be us is not us.
+          anything other than the plain-text sign-in message shown in your wallet &mdash; and
+          that message always names the site you are on. If the domain your wallet shows
+          isn&rsquo;t the one in your address bar, don&rsquo;t sign. Anything else claiming to be
+          us is not us.
         </Callout>
       </Clause>
 

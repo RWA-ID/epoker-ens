@@ -58,7 +58,8 @@ epoker-eth/
 └── worker/                    Cloudflare Worker + Durable Objects + D1
     ├── src/index.ts           router: /tables /leaderboard /profile /claim + WS forwarding
     ├── src/table.ts           TableDO — ONE Durable Object per table, all game logic
-    ├── src/auth.ts            wallet-signature verification (viem verifyMessage)
+    ├── src/session.ts         SIWE nonces + verification, HMAC session tokens
+    ├── src/auth.ts            legacy static-signature check (transitional)
     ├── src/handle.ts          on-chain check that a claimed hoodfi name is really yours
     ├── src/chat.ts            chat sanitizer (links stripped; `.eth` names preserved)
     ├── src/poker/deck.ts      crypto.getRandomValues Fisher–Yates shuffle
@@ -215,27 +216,63 @@ A fresh pin often 504s on `_next/static/chunks/*.js` until the CID propagates,
 which surfaces as a `ChunkLoadError` and a blank page. Warm the files, or wait,
 before concluding the build is broken.
 
-## Security notes (MVP trade-offs)
+## Security notes
 
-Game logic is already fully server-authoritative. Remaining hardening:
+Game logic is fully server-authoritative: clients send intents, the Durable
+Object shuffles, deals, validates every bet and pays out.
 
-- Sign-in is a static message signature (replayable) → upgrade to SIWE with
-  Worker-issued nonce + expiry.
-- `Access-Control-Allow-Origin: *` → pin to the deployed frontend origins.
-- Avatar records are client-supplied for display (the *handle* is verified
-  on-chain, the avatar is not) — worst case is a wrong picture.
-- `NEXT_PUBLIC_*` values (Alchemy key, Reown ID) are public by design — scope
-  them in their dashboards.
+**Sign-in** is Sign-In with Ethereum (EIP-4361). The worker issues a one-time
+nonce (D1 `auth_nonces`, 10 min TTL, deleted on use); the wallet signs a
+message naming the site's domain, Robinhood Chain (4663) and an expiry; the
+worker checks domain, origin, chain, expiry, signature and nonce, then returns
+a 24h HMAC session token (`SESSION_SECRET`). API calls send it as
+`Authorization: Bearer`, sockets as `?token=`. The router derives the player's
+address from the token and passes only that to the table. Rotating
+`SESSION_SECRET` signs everyone out. `ALLOW_LEGACY_SIG=1` still accepts the old
+static signature for the pre-SIWE frontend — set it to `0` once `epoker.eth`
+points at a SIWE build.
 
-## Known MVP limitations
+**Origins.** CORS, the SIWE domain check and WebSocket upgrades all use the
+`ALLOWED_ORIGINS` allowlist (`wrangler.toml`). Upgrades from any other origin
+are refused (cross-site WebSocket hijacking).
 
-- No tournaments, no mid-session rebuy UI (leave and re-sit), no per-hand
-  history (aggregate stats only).
-- Disconnected players are auto-folded by the 30s timer and cashed out between
-  hands.
-- DO state is in-memory with non-hibernating WebSockets — simplest correct
-  MVP; migrate to the WebSocket Hibernation API + DO storage for idle-table
-  cost optimization at scale.
+**Identity.** Handles are verified server-side — hoodfi.eth names against the
+Robinhood Chain registry, mainnet names by forward resolution — and the
+avatar is read from that verified name's record, never taken from the client.
+
+**Abuse limits.**
+- Cloudflare rate limiters: sign-in 20/min per IP, table creation 5/min per
+  address, socket upgrades 40/min per IP.
+- Per socket: frames over 1 KB refused; chat 5 lines / 10 s; more than 40
+  messages / 5 s closes the socket. 150 sockets per table.
+- Chat is plain text with links stripped server-side.
+- Errors return a generic message; details go to `wrangler tail`.
+
+`NEXT_PUBLIC_*` values (Alchemy key, Reown ID, Privy app ID) are public by
+design — scope them to the frontend domains in their dashboards.
+
+### Deploying the hardening
+
+```bash
+cd worker
+npx wrangler d1 execute epoker --file=migrations/002_auth_nonces.sql --remote
+openssl rand -base64 48 | npx wrangler secret put SESSION_SECRET
+npx wrangler deploy          # legacy signatures still accepted
+# build + pin the frontend, point epoker.eth at it, then:
+# set ALLOW_LEGACY_SIG = "0" in wrangler.toml and deploy again
+```
+
+## Known limitations
+
+- No tournaments, no mid-session rebuy UI (leave and re-sit), no stored hand
+  history — the in-table hand log is memory only.
+- A dropped player keeps their seat for 60 s; after that they are cashed out
+  between hands.
+- DO state is in-memory with non-hibernating WebSockets. The WebSocket
+  Hibernation API + DO storage would cut idle-table cost and survive
+  evictions, but means persisting the whole hand state machine.
+- Session tokens are stateless: one can't be revoked individually before its
+  24h expiry (rotate `SESSION_SECRET` to revoke all).
 - The handle picker's choice is stored per-browser (`localStorage`), so playing
   from a second device defaults back to your shortest name.
 

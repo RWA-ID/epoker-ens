@@ -3,18 +3,60 @@
  * Synthesized sound effects (WebAudio) — no audio assets to ship over
  * IPFS. Each effect is a tiny envelope-shaped oscillator/noise burst.
  * Toggle state persists in localStorage.
+ *
+ * Mobile is why this file is fussy. Sounds are triggered by WebSocket
+ * messages, and on iOS/Android an AudioContext created or resumed outside a
+ * user gesture stays `suspended` forever — so the table was silent on phones.
+ * The fix is to unlock the context inside the first tap, and again after the
+ * page comes back from the background (iOS parks it as `interrupted`). iOS
+ * also routes WebAudio through the ringer switch unless the audio session is
+ * declared as playback.
  */
 
 let ctx: AudioContext | null = null;
 const MUTE_KEY = 'epoker:muted';
 
+type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
+type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
+
 function audio(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!ctx) {
-    try { ctx = new AudioContext(); } catch { return null; }
+    const Ctor = window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
+    if (!Ctor) return null;
+    try { ctx = new Ctor(); } catch { return null; }
   }
-  if (ctx.state === 'suspended') void ctx.resume();
+  if (ctx.state !== 'running') void ctx.resume().catch(() => { /* needs a gesture */ });
   return ctx;
+}
+
+/** Call from inside a user gesture: resume and play one silent sample. */
+export function unlockAudio() {
+  const nav = navigator as AudioSessionNavigator;
+  // Safari 16.4+: play through the ringer switch like a media app would.
+  try { if (nav.audioSession) nav.audioSession.type = 'playback'; } catch { /* unsupported */ }
+  const ac = audio();
+  if (!ac) return;
+  try {
+    const src = ac.createBufferSource();
+    src.buffer = ac.createBuffer(1, 1, ac.sampleRate);
+    src.connect(ac.destination);
+    src.start(0);
+  } catch { /* nothing to unlock */ }
+}
+
+let unlockInstalled = false;
+/**
+ * Unlock on every tap until the context is running — a single `once`
+ * listener isn't enough, because iOS suspends it again after backgrounding.
+ */
+export function installAudioUnlock() {
+  if (unlockInstalled || typeof window === 'undefined') return;
+  unlockInstalled = true;
+  const onGesture = () => { if (!ctx || ctx.state !== 'running') unlockAudio(); };
+  for (const type of ['pointerdown', 'touchend', 'keydown'] as const) {
+    window.addEventListener(type, onGesture, { capture: true, passive: true });
+  }
 }
 
 export function isMuted(): boolean {

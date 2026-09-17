@@ -4,30 +4,59 @@
  * (query param instead of a dynamic segment so the site static-exports
  * cleanly for IPFS/ENS hosting).
  *
- * Flow: connect wallet → one-time sign-in signature → WebSocket to the
- * table's Durable Object → sit → play.
+ * Flow: connect wallet → Sign-In with Ethereum (one signature, 24h session)
+ * → WebSocket to the table's Durable Object → sit → play.
+ *
+ * Layout (from the Claude Design table handoff):
+ *   desktop     header bar · felt + betting dock · Chat/Hand log docked right
+ *   phone       header bar · felt + betting dock · Chat button → bottom drawer
+ *   full screen a fixed layer over the whole viewport; landscape puts the dock
+ *               beside the felt. "Rotate" turns it 90° for portrait-locked
+ *               wallet browsers. A landscape phone enters it automatically.
  */
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useConnect, useWallet } from '@/lib/wallet';
 import { useIdentity } from '@/lib/identity';
-import { ensureAuth, cachedSignature } from '@/lib/auth';
+import { ensureAuth, cachedSession, clearSession, type AuthSession } from '@/lib/auth';
 import { useTableSocket } from '@/lib/ws';
-import { isMuted, setMuted } from '@/lib/sounds';
+import type { TableView } from '@/lib/types';
+import { installAudioUnlock, isMuted, setMuted, unlockAudio } from '@/lib/sounds';
 import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PokerTable } from '@/components/PokerTable';
 import { ActionBar } from '@/components/ActionBar';
-import { ChatPanel } from '@/components/ChatPanel';
+import { TableDrawer, TablePanel, type PanelTab } from '@/components/TablePanel';
+import { ChatIcon, CollapseIcon, ExpandIcon, LinkIcon, RotateIcon, SoundIcon } from '@/components/TableIcons';
 import {
-  TILT_QUERY, PORTRAIT_PHONE_QUERY, useMediaQuery, enterTiltMode, canForceTilt,
+  TILT_QUERY, useMediaQuery, requestNativeFullscreen, exitNativeFullscreen,
+  readRotatePref, writeRotatePref, nextRotation, type Rotation,
 } from '@/lib/tilt';
 
 const STAGE_LABEL: Record<string, string> = {
   waiting: 'Waiting', preflop: 'Pre-flop', flop: 'Flop',
   turn: 'Turn', river: 'River', showdown: 'Showdown',
 };
+
+/**
+ * Portrait viewport turned sideways: the box is sized to the viewport's
+ * height × width, rotated about its top-left corner, then slid back on screen.
+ * Touch hit-testing follows CSS transforms, so every button and the slider
+ * keep working. Both directions exist because a player may turn the phone
+ * either way.
+ */
+function rotatedStyle(rotation: 90 | 270): React.CSSProperties {
+  return {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100dvh',
+    height: '100dvw',
+    transform: rotation === 90 ? 'translateX(100dvw) rotate(90deg)' : 'translateY(100dvh) rotate(-90deg)',
+    transformOrigin: 'top left',
+  };
+}
 
 export default function TablePage() {
   return (
@@ -40,36 +69,32 @@ export default function TablePage() {
 function TableInner() {
   const tableId = useSearchParams().get('id');
   const open = useConnect();
-  const { address, isConnected, isRestoring, handle, avatar } = useIdentity();
+  const { address, isConnected, isRestoring, handle } = useIdentity();
   const { signMessage } = useWallet();
 
-  const [sig, setSig] = useState<string | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
-  const [muted, setMutedState] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const tilt = useMediaQuery(TILT_QUERY);
-  const portraitPhone = useMediaQuery(PORTRAIT_PHONE_QUERY);
-  const [hideTiltHint, setHideTiltHint] = useState(false);
 
-  useEffect(() => setMutedState(isMuted()), []);
-  // Tilt mode is a fixed full-screen layer; stop the page under it scrolling.
   useEffect(() => {
-    if (!tilt) return;
-    const root = document.documentElement;
-    root.style.overflow = 'hidden';
-    return () => { root.style.overflow = ''; };
-  }, [tilt]);
-  useEffect(() => {
-    if (address) setSig(cachedSignature(address));
+    setSession(address ? cachedSession(address) : null);
   }, [address]);
+
+  // Sessions last 24h. When one runs out mid-visit, drop it so the page asks
+  // for a fresh signature instead of reconnecting with a dead token forever.
+  useEffect(() => {
+    if (!session || !address) return;
+    const ms = session.expiresAt - Date.now() - 60_000;
+    const t = setTimeout(() => { clearSession(address); setSession(null); }, Math.max(0, ms));
+    return () => clearTimeout(t);
+  }, [session, address]);
 
   const signIn = async () => {
     if (!address) return;
     setSigning(true);
     setSignError(null);
     try {
-      setSig(await ensureAuth(address, signMessage));
+      setSession(await ensureAuth(address, signMessage));
     } catch (err) {
       setSignError(err instanceof Error ? err.message : 'Signature rejected');
     } finally {
@@ -77,38 +102,25 @@ function TableInner() {
     }
   };
 
-  // Auto-prompt the one-time sign-in as soon as the wallet is connected, so
-  // joining a table is just Join → confirm in wallet (no extra click). A
-  // cached signature resolves silently; a rejection falls back to the manual
-  // retry button below. One attempt per address.
+  // Auto-prompt sign-in as soon as the wallet is connected, so joining a
+  // table is just Join → confirm in wallet. A cached session resolves
+  // silently; a rejection falls back to the manual retry button below. One
+  // attempt per address.
   const autoSignedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!isConnected || !address || sig) return;
+    if (!isConnected || !address || session) return;
     if (autoSignedFor.current === address) return;
     autoSignedFor.current = address;
     signIn();
-  }, [isConnected, address, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isConnected, address, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const identity = useMemo(
-    () => (address && sig ? { address: address.toLowerCase(), sig, handle, avatar } : null),
-    [address, sig, handle, avatar],
+    () => (address && session ? { address: address.toLowerCase(), token: session.token, handle } : null),
+    [address, session, handle],
   );
 
   const table = useTableSocket(tableId, identity);
   const { state } = table;
-
-  // Auto-dismiss transient errors (illegal action, seat taken, …).
-  useEffect(() => {
-    if (!table.error) return;
-    const t = setTimeout(table.clearError, 5000);
-    return () => clearTimeout(t);
-  }, [table.error]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const copyInvite = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   /* ---------- Guard rails ---------- */
   if (!tableId) return <PageNote text="No table id — head back to the lobby." lobby />;
@@ -123,7 +135,7 @@ function TableInner() {
       </PageNote>
     );
   }
-  if (!sig) {
+  if (!session) {
     return (
       <PageNote
         text={
@@ -145,22 +157,225 @@ function TableInner() {
     );
   }
 
+  return <TableScreen table={table} state={state} you={identity?.address} />;
+}
+
+/** Everything the socket drives — rendered with a live table, or a mock in tests. */
+export type TableConnection = Pick<
+  ReturnType<typeof useTableSocket>,
+  'chat' | 'log' | 'lastResult' | 'error' | 'connected' | 'clearError' | 'sit' | 'leave' | 'act' | 'say'
+>;
+
+export function TableScreen({
+  table,
+  state,
+  you,
+}: {
+  table: TableConnection;
+  state: TableView;
+  you: string | undefined;
+}) {
+  const [muted, setMutedState] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [full, setFull] = useState(false);
+  const [rotatePref, setRotatePref] = useState<Rotation>(0);
+  const [panelTab, setPanelTab] = useState<PanelTab>('chat');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Chat replayed on connect is history, not news — only later lines badge.
+  const [chatSeenTs, setChatSeenTs] = useState(() => Date.now());
+
+  const tilt = useMediaQuery(TILT_QUERY);
+  const portrait = useMediaQuery('(orientation: portrait)');
+  const desktop = useMediaQuery('(min-width: 1024px)');
+
+  useEffect(() => {
+    setMutedState(isMuted());
+    setRotatePref(readRotatePref());
+    installAudioUnlock();
+  }, []);
+
+  // Full screen is a fixed layer; stop the page under it scrolling.
+  const layer = full || tilt;
+  useEffect(() => {
+    if (!layer) return;
+    const root = document.documentElement;
+    root.style.overflow = 'hidden';
+    return () => { root.style.overflow = ''; };
+  }, [layer]);
+
+  // Leaving native full screen (Esc, Android back) leaves our layer too.
+  const nativeFull = useRef(false);
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement && nativeFull.current) {
+        nativeFull.current = false;
+        setFull(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFull = async () => {
+    if (full) {
+      setFull(false);
+      nativeFull.current = false;
+      await exitNativeFullscreen();
+      return;
+    }
+    setFull(true);
+    nativeFull.current = await requestNativeFullscreen();
+  };
+
+  // Auto-dismiss transient errors (illegal action, seat taken, …).
+  useEffect(() => {
+    if (!table.error) return;
+    const t = setTimeout(table.clearError, 5000);
+    return () => clearTimeout(t);
+  }, [table.error]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const docked = desktop && !layer;
+  // Everything in the chat counts as read while you can see it.
+  const lastChatTs = table.chat[table.chat.length - 1]?.ts ?? 0;
+  const chatVisible = docked ? panelTab === 'chat' : drawerOpen && panelTab === 'chat';
+  useEffect(() => {
+    if (chatVisible) setChatSeenTs(lastChatTs);
+  }, [chatVisible, lastChatTs]);
+  const unread = chatVisible ? 0 : table.chat.filter((m) => m.ts > chatSeenTs && m.address !== you).length;
+
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  const copyInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked */ }
+  };
+
+  const toggleSound = () => {
+    const next = !muted;
+    setMuted(next);
+    setMutedState(next);
+    if (!next) unlockAudio(); // this click is the gesture mobile needs
+  };
+
   const me = state.yourSeat !== null ? state.seats.find((s) => s.seat === state.yourSeat) : undefined;
   const inHand = state.stage !== 'waiting';
+  const rotated = full && portrait && rotatePref !== 0 ? rotatePref : null;
+  const wide = layer && (!!rotated || !portrait);
 
-  // Betting controls + the last result: under the felt normally, in the side
-  // column in tilt mode (a landscape phone has no height to spare below it).
-  const controls = (
-    <>
-      <div className="mt-4 tilt:mt-0">
-        <ActionBar state={state} onAct={table.act} />
+  const panel = (onClose?: () => void) => (
+    <TablePanel
+      tab={panelTab}
+      onTab={setPanelTab}
+      chat={table.chat}
+      log={table.log}
+      onSend={table.say}
+      you={you}
+      onClose={onClose}
+      className={onClose ? 'h-full' : 'absolute inset-0'}
+    />
+  );
+
+  /* ---------- Pieces ---------- */
+
+  const headerBar = (
+    <header className={cn('flex flex-wrap items-center justify-between gap-x-3 gap-y-2', layer ? 'shrink-0' : 'mb-3')}>
+      <div className="flex min-w-0 flex-1 basis-[220px] items-center gap-2.5 sm:gap-4">
+        <Link
+          href="/"
+          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-btn border border-cream/20 bg-cream/[0.05] px-2.5 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-cream transition-colors hover:border-acid/50 hover:text-acid sm:px-[13px]"
+        >
+          ← Lobby
+        </Link>
+        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+          <h1 className={cn('hp-display hp-w80 truncate leading-none tracking-[-0.02em] text-cream', layer ? 'text-[17px]' : 'text-[19px] sm:text-[22px]')}>
+            {state.name}
+          </h1>
+          <p className="truncate font-mono text-[10px] tracking-[0.08em] text-dim sm:text-[10.5px]">
+            {state.smallBlind}/{state.bigBlind} · stack {formatChips(state.buyIn)} · {state.seats.length}/{state.maxPlayers} seated
+            {inHand && ` · hand #${state.handNumber}`}
+            {!table.connected && <span className="text-red-400"> · reconnecting…</span>}
+          </p>
+        </div>
       </div>
+
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        <span
+          className={cn(
+            'hidden items-center gap-[7px] whitespace-nowrap rounded-full border px-3 py-[7px] font-mono text-[10px] uppercase tracking-[0.14em] sm:flex',
+            inHand ? 'border-acid/40 bg-acid/[0.12] text-acid' : 'border-cream/15 bg-cream/[0.04] text-dim',
+          )}
+        >
+          <span className={cn('h-1.5 w-1.5 rounded-full', inHand ? 'animate-pulse bg-acid' : 'bg-dim')} />
+          {inHand ? `In hand · ${STAGE_LABEL[state.stage]}` : 'Waiting'}
+        </span>
+
+        {full && portrait && (
+          <BarButton
+            label={rotated ? 'Turn back' : 'Rotate'}
+            active={!!rotated}
+            onClick={() => {
+              const next = nextRotation(rotatePref);
+              setRotatePref(next);
+              writeRotatePref(next);
+            }}
+          >
+            <RotateIcon />
+          </BarButton>
+        )}
+        {!tilt && (
+          <BarButton label={full ? 'Exit full screen' : 'Full screen'} onClick={toggleFull}>
+            {full ? <CollapseIcon /> : <ExpandIcon />}
+          </BarButton>
+        )}
+        {!docked && (
+          <BarButton label="Chat" onClick={() => setDrawerOpen(true)} badge={unread}>
+            <ChatIcon />
+          </BarButton>
+        )}
+        <BarButton label={copied ? 'Copied!' : 'Invite'} showLabel={!layer} onClick={copyInvite}>
+          <LinkIcon />
+        </BarButton>
+        {me && (
+          <button
+            onClick={table.leave}
+            className="whitespace-nowrap rounded-btn border border-[#ff4d5e]/45 bg-[#ff4d5e]/10 px-2.5 py-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[#ff8b95] transition-colors hover:border-[#ff3b52] hover:bg-[#ff3b52] hover:text-white sm:px-[13px]"
+          >
+            Leave
+          </button>
+        )}
+      </div>
+    </header>
+  );
+
+  const feltOverlays = (
+    <>
+      <div className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-16px)] flex-wrap gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em] sm:left-3 sm:top-2.5 sm:text-[9.5px]">
+        {state.practice && <FeltChip>Practice · vs bots</FeltChip>}
+        {state.isPrivate && <FeltChip>Private</FeltChip>}
+        <FeltChip onClick={toggleSound} pressed={!muted}>
+          <SoundIcon muted={muted} size={11} />
+          {muted ? 'Sounds off' : 'Sounds on'}
+        </FeltChip>
+      </div>
+
+      {table.error && (
+        <div
+          role="alert"
+          className="absolute left-1/2 top-[12%] z-30 max-w-[80%] -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-950/95 px-3 py-1.5 text-center font-mono text-[11px] text-red-200 shadow-lg sm:text-[12px]"
+        >
+          {table.error}
+        </div>
+      )}
+
       {table.lastResult && state.stage === 'showdown' && (
-        <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-acid-400/30 bg-gradient-to-b from-[#141a08]/80 to-night-850/80 px-5 py-4 text-center text-sm tilt:mt-0 tilt:w-full tilt:px-3 tilt:py-2">
+        <div className="absolute left-1/2 top-[24%] z-20 max-w-[70%] -translate-x-1/2 rounded-xl border border-acid/40 bg-night-950/90 px-3 py-1.5 text-center shadow-[0_10px_30px_rgba(0,0,0,0.6)] backdrop-blur-sm sm:px-5 sm:py-2.5">
           {table.lastResult.winners.map((w, i) => (
-            <p key={i} className="hp-display hp-w85 text-base text-acid tilt:text-sm">
-              🏆 {displayName(w.handle, w.address)} wins {formatChips(w.amount)}
-              {w.handName ? ` with ${w.handName}` : ''}
+            <p key={i} className="hp-display hp-w85 text-[12px] text-acid sm:text-base">
+              {displayName(w.handle, w.address)} wins {formatChips(w.amount)}
+              {w.handName ? ` · ${w.handName}` : ''}
             </p>
           ))}
         </div>
@@ -168,154 +383,124 @@ function TableInner() {
     </>
   );
 
+  const felt = <PokerTable state={state} onSit={table.sit}>{feltOverlays}</PokerTable>;
+
+  /* ---------- Full-screen layer ---------- */
+
+  if (layer) {
+    return (
+      <div className="fixed inset-0 z-[60] overflow-hidden bg-night-950">
+        <div
+          style={rotated ? rotatedStyle(rotated) : undefined}
+          className={cn(
+            'flex flex-col gap-2 p-2',
+            !rotated && 'h-full w-full pb-[max(8px,env(safe-area-inset-bottom))] pl-[max(8px,env(safe-area-inset-left))] pr-[max(8px,env(safe-area-inset-right))] pt-[max(8px,env(safe-area-inset-top))]',
+          )}
+        >
+          {headerBar}
+          <div className={cn('flex min-h-0 flex-1 gap-2', !wide && 'flex-col')}>
+            {/* Sized by container units so the 3:2 felt fits whichever way is
+                tighter; the bottom padding leaves room for the foreground
+                seats, whose cards hang below the art. */}
+            <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center pb-7 [container-type:size]">
+              <div className="w-[min(100cqw,150cqh)]">{felt}</div>
+            </div>
+            <div className={cn('flex flex-col justify-end', wide ? 'w-[clamp(220px,32%,320px)] shrink-0' : 'shrink-0')}>
+              <ActionBar state={state} onAct={table.act} compact columns={wide ? 2 : 4} />
+            </div>
+          </div>
+          <TableDrawer open={drawerOpen} onClose={closeDrawer}>{panel(closeDrawer)}</TableDrawer>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- In-page ---------- */
+
   return (
-    <div className="mx-auto max-w-[1400px] px-4 pb-14 pt-7 sm:px-7 tilt:fixed tilt:inset-0 tilt:z-[60] tilt:flex tilt:max-w-none tilt:flex-col tilt:overflow-hidden tilt:bg-night-950 tilt:pb-2 tilt:pl-[max(12px,env(safe-area-inset-left))] tilt:pr-[max(12px,env(safe-area-inset-right))] tilt:pt-2">
-      {/* Table header bar */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5 tilt:mb-1.5 tilt:flex-nowrap tilt:gap-2">
-        <div className="flex min-w-0 items-center gap-3.5 tilt:gap-2">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="border border-white/10 bg-white/[0.04] tilt:px-2.5 tilt:py-1.5">
-              ← Lobby
-            </Button>
-          </Link>
-          <div className="min-w-0">
-            <h1 className="hp-display hp-w80 truncate text-[22px] leading-tight text-cream tilt:text-base">
-              {state.name}
-            </h1>
-            <p className="mt-0.5 font-mono text-xs text-dim tilt:hidden">
-              Blinds {state.smallBlind} / {state.bigBlind} · Stack {formatChips(state.buyIn)} ·{' '}
-              {state.seats.length} / {state.maxPlayers} seated
-              {state.isPrivate && ` · ${state.whitelist?.length ?? 0} invited`}
-              {inHand && ` · Hand #${state.handNumber}`}
-              {!table.connected && <span className="text-red-400"> · reconnecting…</span>}
-            </p>
+    /* On a wide screen everything fits the viewport, as in the design: the
+       felt takes the space left between the bar and the dock, and chat
+       scrolls inside its own column instead of growing the page. */
+    <div className="mx-auto flex max-w-[1500px] flex-col px-3 pb-6 pt-4 sm:px-6 sm:pt-5 lg:h-[calc(100dvh-var(--hp-header,73px))] lg:overflow-hidden">
+      {headerBar}
+      <div className={cn('min-h-0 flex-1', docked && 'grid grid-cols-[minmax(0,1fr)_296px] gap-3')}>
+        <div className="flex min-h-0 min-w-0 flex-col gap-2.5">
+          <div className="flex min-h-0 items-start justify-center lg:flex-1 lg:items-center lg:pb-1 lg:[container-type:size]">
+            <div className="w-full lg:w-[min(100cqw,150cqh)]">{felt}</div>
+          </div>
+          <div className="mx-auto w-full max-w-4xl shrink-0">
+            <ActionBar state={state} onAct={table.act} />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 tilt:shrink-0 tilt:flex-nowrap tilt:gap-1.5">
-          {state.practice && (
-            <span className="flex items-center gap-1.5 rounded-full border border-acid-400/30 bg-acid-400/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-acid tilt:hidden">
-              Practice · vs bots
-            </span>
-          )}
-          {state.isPrivate && (
-            <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted tilt:hidden">
-              🔒 Private
-            </span>
-          )}
-          {!table.connected && (
-            <span className="hidden text-[11px] text-red-400 tilt:inline">reconnecting…</span>
-          )}
-          <span
-            className={cn(
-              'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] tilt:px-2.5 tilt:py-1 tilt:text-[10px]',
-              inHand
-                ? 'border-green-400/30 bg-green-400/10 text-green-400'
-                : 'border-acid-400/30 bg-acid-400/10 text-acid',
-            )}
-          >
-            <span
-              className={cn(
-                'h-1.5 w-1.5 rounded-full',
-                inHand ? 'animate-pulse bg-green-400' : 'bg-acid',
-              )}
-            />
-            {inHand ? `In hand · ${STAGE_LABEL[state.stage]}` : 'Waiting for players'}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="tilt:px-2 tilt:py-1.5"
-            aria-label={muted ? 'Sounds off' : 'Sounds on'}
-            onClick={() => { setMuted(!muted); setMutedState(!muted); }}
-          >
-            {muted ? '🔇' : '🔊'}
-            <span className="tilt:hidden">{muted ? 'Sounds off' : 'Sounds on'}</span>
-          </Button>
-          <Button variant="outline" size="sm" className="tilt:hidden" onClick={copyInvite}>
-            {copied ? 'Copied!' : '🔗 Invite'}
-          </Button>
-          {me && (
-            <Button variant="danger" size="sm" className="tilt:px-2.5 tilt:py-1.5" onClick={table.leave}>
-              Leave<span className="tilt:hidden">&nbsp;table</span>
-            </Button>
-          )}
-        </div>
+        {docked && <div className="relative min-h-0">{panel()}</div>}
       </div>
-
-      {/* Portrait phone: point at tilt mode */}
-      {portraitPhone && !hideTiltHint && (
-        <div className="mb-3 flex items-center gap-3 rounded-xl border border-acid-400/25 bg-acid-400/[0.06] px-3.5 py-2 text-xs text-muted">
-          <span className="flex-1">Turn your phone sideways for tilt mode, a full-screen table.</span>
-          {canForceTilt() && (
-            <button onClick={enterTiltMode} className="font-semibold uppercase tracking-[0.1em] text-acid">
-              Go
-            </button>
-          )}
-          <button onClick={() => setHideTiltHint(true)} aria-label="Dismiss" className="px-1 text-dim">
-            ✕
-          </button>
-        </div>
+      {!docked && (
+        <TableDrawer open={drawerOpen} onClose={closeDrawer}>{panel(closeDrawer)}</TableDrawer>
       )}
-
-      {table.error && (
-        <div className="mb-3 rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-2 text-sm text-red-300 tilt:absolute tilt:left-1/2 tilt:top-12 tilt:z-30 tilt:mb-0 tilt:-translate-x-1/2 tilt:bg-red-950/95">
-          {table.error}
-        </div>
-      )}
-
-      {/* Private table, and you're not on the guest list → spectate only */}
-      {state.isPrivate && !state.canSit && state.yourSeat === null && (
-        <div className="mb-3 rounded-xl border border-acid-400/30 bg-acid-400/10 px-4 py-2.5 text-sm text-acid tilt:hidden">
-          🔒 This is a private table — only names on the host’s guest list can take a seat.
-          You’re welcome to watch and chat.
-        </div>
-      )}
-
-      {/* Guest list, shown while the private table fills up */}
-      {state.isPrivate && !!state.whitelist?.length && !inHand && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-dim tilt:hidden">
-          <span className="mr-1 font-semibold uppercase tracking-[0.14em] text-dim">
-            Guest list:
-          </span>
-          {state.whitelist.map((g) => {
-            const seated = state.seats.some((s) => s.address === g.address);
-            return (
-              <span
-                key={g.address}
-                className={cn(
-                  'rounded-full border px-2.5 py-1 font-mono text-[11px]',
-                  seated
-                    ? 'border-green-400/30 bg-green-400/10 text-green-400'
-                    : 'border-white/10 text-muted',
-                )}
-              >
-                {displayName(g.handle, g.address)}
-                {seated && ' ✓'}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Felt + chat */}
-      <div className="grid gap-5 lg:grid-cols-[1fr_320px] tilt:min-h-0 tilt:flex-1 tilt:grid-cols-[1fr_minmax(210px,32%)] tilt:gap-3">
-        <div className="tilt:flex tilt:min-h-0 tilt:items-center tilt:justify-center">
-          {/* In tilt mode the felt is sized by height: 3:2 art, minus the header */}
-          <div className="tilt:w-[min(100%,calc((100dvh-60px)*1.5))]">
-            <PokerTable state={state} onSit={table.sit} />
-          </div>
-          {!tilt && controls}
-        </div>
-        {/* lg: absolute inset pins the sidebar to the felt column's height, so
-            chat scrolls internally instead of growing the page as messages arrive */}
-        <div className="lg:relative tilt:flex tilt:min-h-0 tilt:flex-col">
-          <div className="flex flex-col gap-4 lg:absolute lg:inset-0 tilt:min-h-0 tilt:flex-1 tilt:gap-2 tilt:overflow-y-auto">
-            {tilt && controls}
-            <ChatPanel messages={table.chat} onSend={table.say} you={identity?.address} />
-          </div>
-        </div>
-      </div>
     </div>
+  );
+}
+
+function BarButton({
+  label,
+  onClick,
+  children,
+  badge = 0,
+  active = false,
+  showLabel = false,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  badge?: number;
+  active?: boolean;
+  /** Show the text next to the icon from `sm` up. */
+  showLabel?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'relative flex h-[34px] min-w-[34px] items-center justify-center gap-1.5 whitespace-nowrap rounded-btn border px-2 font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors',
+        active
+          ? 'border-acid/60 bg-acid/[0.12] text-acid'
+          : 'border-cream/20 bg-cream/[0.05] text-[#c9cdc2] hover:border-acid/50 hover:text-acid',
+        showLabel && 'sm:px-[13px]',
+      )}
+    >
+      {children}
+      {showLabel && <span className="hidden sm:inline">{label}</span>}
+      {badge > 0 && (
+        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-acid px-1 font-mono text-[9px] font-semibold leading-none tracking-normal text-ink">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function FeltChip({
+  children,
+  onClick,
+  pressed,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  pressed?: boolean;
+}) {
+  const cls = 'flex items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-cream/[0.14] bg-[rgba(5,6,3,0.7)] px-2 py-1 uppercase text-dim sm:px-[9px] sm:py-[5px]';
+  return onClick ? (
+    <button
+      onClick={onClick}
+      aria-pressed={pressed}
+      className={cn(cls, 'tracking-[0.16em] transition-colors hover:border-acid/50 hover:text-acid')}
+    >
+      {children}
+    </button>
+  ) : (
+    <span className={cls}>{children}</span>
   );
 }
 

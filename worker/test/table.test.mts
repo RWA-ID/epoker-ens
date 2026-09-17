@@ -4,10 +4,15 @@
  *
  *   npm run test:table
  */
-import { TableDO } from '../src/table';
+import { TableDO, SOCKET_LIMITS } from '../src/table';
 import { DISCONNECT_GRACE_MS, BUYIN_BB } from '../src/poker/types';
 
 const SPEED = 200;
+// The bots below fire an action every 2ms of REAL time; the flood guard would
+// (rightly) cut them off. Limits get their own test at the end.
+const realLimits = structuredClone(SOCKET_LIMITS);
+SOCKET_LIMITS.flood.max = Infinity;
+SOCKET_LIMITS.chat.max = Infinity;
 const realSetTimeout = globalThis.setTimeout;
 const realSetInterval = globalThis.setInterval;
 (globalThis as any).setTimeout = (fn: () => void, ms = 0) => realSetTimeout(fn, ms / SPEED);
@@ -244,6 +249,46 @@ function autoPlay(ws: FakeSocket, pick: (s: any) => object) {
   send(sockets[other], { type: 'leave' });
   check('leave: turn stays with the acting player', table.actingSeat === acting, `${acting} -> ${table.actingSeat}`);
   check('leave: leaver is folded', table.playerAtSeat(other).folded === true);
+}
+
+/* ---------------- 5. hand log ---------------- */
+{
+  const { table } = await makeTable({ id: 't4', name: 'Public', smallBlind: 10 });
+  const sockets = [1, 2, 3, 4].map((n) => connect(table, addr(n)));
+  sockets.forEach((ws, i) => send(ws, { type: 'sit', seat: i }));
+  await wait(5000);
+  const acting = table.actingSeat;
+  send(sockets[acting], { type: 'action', action: 'fold' });
+  const lines = sockets[0].sent.filter((m) => m.type === 'log').map((m) => m.entry);
+  check('log: new hand line', lines.some((l) => l.address === null && /^Hand #1$/.test(l.text)));
+  check('log: blinds posted with amounts',
+    lines.some((l) => l.text === 'posts SB' && l.amount === 10) && lines.some((l) => l.text === 'posts BB' && l.amount === 20));
+  check('log: the fold is recorded', lines.some((l) => l.text === 'folds' && l.address === addr(acting + 1)));
+  const late = connect(table, addr(9));
+  check('log: replayed to a new connection', late.sent.filter((m) => m.type === 'log').length === lines.length);
+  check('log: no hole cards in any line', lines.every((l) => l.cards === undefined));
+}
+
+/* ---------------- 6. per-socket limits ---------------- */
+{
+  Object.assign(SOCKET_LIMITS.flood, realLimits.flood);
+  Object.assign(SOCKET_LIMITS.chat, realLimits.chat);
+  const { table } = await makeTable({ id: 't5', name: 'Public', smallBlind: 10 });
+  const ws = connect(table, addr(1));
+  for (let i = 0; i < 8; i++) send(ws, { type: 'chat', text: `hello ${i}` });
+  await wait(0);
+  const chats = ws.sent.filter((m) => m.type === 'chat').length;
+  check('limits: chat capped per window', chats === realLimits.chat.max, `${chats} delivered`);
+  check('limits: sender told to slow down', ws.errors().some((e) => /slow down/i.test(e)));
+
+  send(ws, { type: 'chat', text: 'x'.repeat(5000) });
+  await wait(0);
+  check('limits: oversized frame refused', ws.errors().includes('message too large'));
+
+  const spam = connect(table, addr(2));
+  for (let i = 0; i < realLimits.flood.max + 5; i++) send(spam, { type: 'ping' });
+  await wait(0);
+  check('limits: flooding socket is closed', spam.closed === true);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');

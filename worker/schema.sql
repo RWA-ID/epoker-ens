@@ -34,3 +34,11 @@ CREATE TABLE IF NOT EXISTS tables (
 );
 
 CREATE INDEX IF NOT EXISTS idx_players_profit ON players (net_profit DESC);
+
+-- One-time SIWE sign-in nonces (src/session.ts). Live DB: migrations/002.
+CREATE TABLE IF NOT EXISTS auth_nonces (
+  nonce       TEXT PRIMARY KEY,
+  expires_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_nonces_expiry ON auth_nonces (expires_at);

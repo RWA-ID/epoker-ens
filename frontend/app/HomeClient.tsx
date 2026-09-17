@@ -177,9 +177,9 @@ export default function HomePage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const sig = await ensureAuth(address, signMessage);
+      const { token } = await ensureAuth(address, signMessage);
       const { id } = await api.createTable(
-        { address, sig },
+        { address, token },
         {
           name: tableName || suggestion,
           smallBlind,

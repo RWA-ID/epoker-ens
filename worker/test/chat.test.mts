@@ -46,3 +46,5 @@ for (const input of MUST_KEEP) {
   console.log(`${ok ? 'ok  ' : 'FAIL'}  ${JSON.stringify(input)} -> ${JSON.stringify(got)}`);
 }
 console.log(`\n${fail === 0 ? 'ALL PASS' : fail + ' FAILURES'}`);
+// Without this the suite always exits 0 — `npm test` stays green on failures.
+process.exit(fail ? 1 : 0);

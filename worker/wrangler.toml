@@ -25,3 +25,30 @@ new_sqlite_classes = ["TableDO"]
 binding = "DB"
 database_name = "epoker"
 database_id = "0acc384c-4925-4b2c-abcd-727c9201f40e"
+
+# SESSION_SECRET is a secret, NOT a var — `npx wrangler secret put SESSION_SECRET`.
+# Never add it here: a [vars] entry shadows the secret of the same name.
+[vars]
+# Frontends allowed by CORS, the SIWE domain check and socket upgrades.
+ALLOWED_ORIGINS = "https://epoker.eth.limo,https://epoker.eth.link,https://hoodpoker.eth.limo,https://hoodpoker.eth.link,http://localhost:3000"
+# Transitional: accept the old static signature from the frontend pinned
+# before SIWE. Set to "0" (and redeploy) once epoker.eth points at a SIWE build.
+ALLOW_LEGACY_SIG = "1"
+MAINNET_RPC = "https://ethereum-rpc.publicnode.com"
+
+# Rate limits (per key, per period in seconds — Cloudflare allows 10 or 60).
+# namespace_id is any account-unique integer.
+[[ratelimits]]
+name = "AUTH_LIMITER"      # nonce + verify, per IP
+namespace_id = "46631"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "CREATE_LIMITER"    # table creation, per address
+namespace_id = "46632"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "SOCKET_LIMITER"    # WebSocket upgrades, per IP
+namespace_id = "46633"
+simple = { limit = 40, period = 60 }

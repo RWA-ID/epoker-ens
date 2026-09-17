@@ -48,8 +48,8 @@ export default function ProfilePage() {
     setClaiming(true);
     setClaimMsg(null);
     try {
-      const sig = await ensureAuth(address, signMessage);
-      const res = await api.claim({ address: address.toLowerCase(), sig });
+      const { token } = await ensureAuth(address, signMessage);
+      const res = await api.claim({ address, token });
       setClaimMsg(`+${formatChips(res.claimed)} chips claimed! 🎉`);
       void queryClient.invalidateQueries({ queryKey: ['profile', address] });
     } catch (err) {

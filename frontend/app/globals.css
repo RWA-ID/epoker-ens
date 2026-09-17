@@ -82,6 +82,43 @@ body { text-wrap: pretty; }
   }
 }
 
+/* Raise slider (table handoff): acid fill up to the thumb, set via --fill. */
+input[type='range'].hp-bet {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background:
+    linear-gradient(90deg, #ccff00, #ccff00) no-repeat,
+    rgba(242, 242, 240, 0.14);
+  background-size: var(--fill, 0%) 100%, 100% 100%;
+  outline: none;
+  touch-action: none;
+}
+input[type='range'].hp-bet::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ccff00;
+  border: 3px solid #0a0a06;
+  box-shadow: 0 0 0 1px #ccff00;
+  cursor: grab;
+}
+input[type='range'].hp-bet::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ccff00;
+  border: 3px solid #0a0a06;
+  box-shadow: 0 0 0 1px #ccff00;
+  cursor: grab;
+}
+input[type='range'].hp-bet:focus-visible { box-shadow: 0 0 0 2px rgba(204, 255, 0, 0.45); }
+
+.hp-scroll::-webkit-scrollbar { width: 5px; }
+.hp-scroll::-webkit-scrollbar-thumb { background: rgba(204, 255, 0, 0.28); border-radius: 3px; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { @apply bg-night-800 rounded; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(204, 255, 0, 0.25); }

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { WORKER_WS_URL } from './config';
 import { sfx } from './sounds';
 import type {
-  ActionType, ChatMessage, ClientMessage, HandResultShare, ServerMessage, TableView,
+  ActionType, ChatMessage, ClientMessage, HandLogEntry, HandResultShare, ServerMessage, TableView,
 } from './types';
 
 export interface HandResult {
@@ -29,14 +29,16 @@ export interface HandResult {
 
 interface Identity {
   address: string;
-  sig: string;
+  /** Session token from lib/auth.ts. */
+  token: string;
+  /** Claimed name — the server verifies it and reads the avatar itself. */
   handle: string | null;
-  avatar: string | null;
 }
 
 export function useTableSocket(tableId: string | null, identity: Identity | null) {
   const [state, setState] = useState<TableView | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [log, setLog] = useState<HandLogEntry[]>([]);
   const [lastResult, setLastResult] = useState<HandResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -90,15 +92,16 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
 
     const connect = () => {
       const params = new URLSearchParams({
-        address: identity.address,
-        sig: identity.sig,
+        token: identity.token,
         name: identity.handle ?? '',
-        avatar: identity.avatar ?? '',
       });
       ws = new WebSocket(`${WORKER_WS_URL}/table/${tableId}/ws?${params}`);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        // Replayed history follows; don't double it up after a reconnect.
+        setChat([]);
+        setLog([]);
         retries.current = 0;
         setConnected(true);
         setError(null);
@@ -134,6 +137,9 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
             break;
           case 'chat':
             setChat((c) => [...c.slice(-99), msg.message]);
+            break;
+          case 'log':
+            setLog((l) => [...l.slice(-79), msg.entry]);
             break;
           case 'handResult': {
             setLastResult({ winners: msg.winners, board: msg.board, ts: Date.now() });
@@ -181,6 +187,9 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
       connect();
     };
 
+    // The server replays recent chat and log lines on every (re)connect.
+    setChat([]);
+    setLog([]);
     connect();
     const heartbeat = setInterval(probe, 25_000);
     document.addEventListener('visibilitychange', onVisible);
@@ -195,7 +204,7 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
       window.removeEventListener('online', onVisible);
       discard();
     };
-  }, [tableId, identity?.address, identity?.sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tableId, identity?.address, identity?.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMsg = useCallback((msg: ClientMessage) => {
     const ws = wsRef.current;
@@ -205,6 +214,7 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
   return {
     state,
     chat,
+    log,
     lastResult,
     error,
     connected,

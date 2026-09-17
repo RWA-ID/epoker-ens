@@ -1,6 +1,12 @@
 'use client';
 /**
- * Tilt mode — the table page on a phone held sideways.
+ * Full-screen table ("tilt mode").
+ *
+ * Tilt mode used to switch on only from a media query — a phone held sideways
+ * with a short viewport. That never fires inside most wallet in-app browsers,
+ * which lock the page to portrait, so there is now an explicit Full screen
+ * button. Inside it, "Rotate" turns the table 90° with CSS so a portrait-
+ * locked browser still gets a landscape table.
  */
 import { useEffect, useState } from 'react';
 
@@ -19,21 +25,47 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /**
- * Best effort: go full screen and lock landscape. Works on Android Chrome;
- * iPhone Safari supports neither, so there the player just turns the phone.
+ * Best effort: native full screen hides the browser chrome where it's
+ * supported (Android, desktop). iPhone Safari and most in-app browsers refuse
+ * — the fixed full-viewport layer still works there.
  */
-export async function enterTiltMode(): Promise<void> {
+export async function requestNativeFullscreen(): Promise<boolean> {
   try {
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-    const orientation = screen.orientation as ScreenOrientation & {
-      lock?: (o: 'landscape') => Promise<void>;
-    };
-    await orientation.lock?.('landscape');
+    if (!document.fullscreenEnabled || document.fullscreenElement) return !!document.fullscreenElement;
+    await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    return true;
   } catch {
-    /* unsupported — rotating by hand still triggers tilt mode */
+    return false;
   }
 }
 
-export function canForceTilt(): boolean {
-  return typeof document !== 'undefined' && !!document.fullscreenEnabled;
+export async function exitNativeFullscreen(): Promise<void> {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+  } catch {
+    /* already out */
+  }
+}
+
+const ROTATE_KEY = 'epoker:rotate';
+
+/** 0 = upright, 90 = turned clockwise, 270 = anticlockwise. */
+export type Rotation = 0 | 90 | 270;
+
+export function readRotatePref(): Rotation {
+  try {
+    const v = Number(localStorage.getItem(ROTATE_KEY));
+    return v === 90 || v === 270 ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function writeRotatePref(r: Rotation) {
+  try { localStorage.setItem(ROTATE_KEY, String(r)); } catch { /* private mode */ }
+}
+
+/** Cycle upright → clockwise → anticlockwise, so either way of holding works. */
+export function nextRotation(r: Rotation): Rotation {
+  return r === 0 ? 90 : r === 90 ? 270 : 0;
 }
