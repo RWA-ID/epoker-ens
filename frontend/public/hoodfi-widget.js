@@ -253,21 +253,146 @@
       }
     }
 
-    function sync() {
-      var label = input.value.trim().toLowerCase();
-      var v = validate(label);
-      msg.textContent = v.msg;
-      if (v.bad) msg.setAttribute("data-bad", ""); else msg.removeAttribute("data-bad");
-      if (v.ok) msg.setAttribute("data-ok", ""); else msg.removeAttribute("data-ok");
-      cta.href = buildUrl(o, v.ok ? label : "", pay);
-      ctaText.textContent = o.text || (v.ok ? "Register " + label + ".hoodfi.eth" : "Connect Wallet");
-      cta.setAttribute("aria-disabled", label && !v.ok ? "true" : "false");
-      showPrice(!label || v.ok);
+    /*
+     * HEADLESS MODE.
+     *
+     * With `onSubmit`, the widget stops being a link. The host owns the wallet — it is
+     * already connected on its own page — so the CTA calls back instead of navigating,
+     * and the visitor never leaves. `onCheck` lets the host answer availability from its
+     * own RPC, which is the one thing local validation cannot know.
+     *
+     * The widget still owns the card, the charset rules and the 4+ character floor. It
+     * does not own the chain: everything about approvals, transactions and receipts stays
+     * on the host's side, where its signer already lives.
+     */
+    var headless = typeof o.onSubmit === "function";
+    if (headless) {
+      // The north-east arrow means "this opens somewhere else". In headless mode nothing
+      // does, and target="_blank" on a button that never navigates is just wrong markup.
+      var arrow = cta.querySelector("svg");
+      if (arrow) arrow.remove();
+      cta.removeAttribute("target");
+      cta.removeAttribute("rel");
+    }
+    var busy = false;
+    var checkSeq = 0;
+    var lastCheck = null; // {label, sellable, reason}
+
+    function setMsg(text, kind) {
+      msg.textContent = text;
+      if (kind === "bad") msg.setAttribute("data-bad", ""); else msg.removeAttribute("data-bad");
+      if (kind === "ok") msg.setAttribute("data-ok", ""); else msg.removeAttribute("data-ok");
     }
 
-    input.addEventListener("input", sync);
+    function currentLabel() {
+      return input.value.trim().toLowerCase();
+    }
+
+    /** Availability, answered by the host. Sequenced so a slow reply cannot overwrite a newer one. */
+    function runCheck(label) {
+      if (typeof o.onCheck !== "function") return;
+      var seq = ++checkSeq;
+      setMsg("checking\u2026");
+      Promise.resolve(o.onCheck(label)).then(
+        function (res) {
+          if (seq !== checkSeq || currentLabel() !== label) return;
+          lastCheck = {
+            label: label,
+            sellable: !res || res.sellable !== false,
+            reason: res && res.reason,
+          };
+          sync();
+        },
+        function () {
+          if (seq !== checkSeq) return;
+          // A failed check must not block a sale: the contract is the real gate.
+          lastCheck = { label: label, sellable: true };
+          sync();
+        }
+      );
+    }
+
+    function sync() {
+      var label = currentLabel();
+      var v = validate(label);
+      var checked = lastCheck && lastCheck.label === label ? lastCheck : null;
+      var sellable = v.ok && (!checked || checked.sellable);
+
+      if (busy) return;
+      if (v.ok && checked && !checked.sellable) {
+        setMsg(checked.reason || "not available", "bad");
+      } else if (headless && v.ok) {
+        // "continue to register" is link-out phrasing; in headless mode nothing navigates.
+        // Say available only once the host has confirmed it, so the word means something.
+        setMsg(checked ? "available" : v.msg.replace(" \u2014 continue to register", ""), "ok");
+      } else {
+        setMsg(v.msg, v.bad ? "bad" : v.ok ? "ok" : null);
+      }
+
+      if (headless) {
+        // No href: this is a button that happens to be an <a> for the site's own styling.
+        cta.removeAttribute("href");
+        cta.setAttribute("role", "button");
+        ctaText.textContent = o.text || (
+          !o.connected ? "Connect wallet"
+            : sellable ? "Register " + label + ".hoodfi.eth"
+            : label ? "Unavailable"
+            : "Type a name"
+        );
+        cta.setAttribute(
+          "aria-disabled",
+          o.connected && (!label || !sellable) ? "true" : "false"
+        );
+      } else {
+        cta.href = buildUrl(o, v.ok ? label : "", pay);
+        ctaText.textContent = o.text || (v.ok ? "Register " + label + ".hoodfi.eth" : "Connect Wallet");
+        cta.setAttribute("aria-disabled", label && !v.ok ? "true" : "false");
+      }
+      showPrice(!label || sellable);
+    }
+
+    var checkTimer = null;
+    input.addEventListener("input", function () {
+      lastCheck = null;
+      checkSeq++;
+      sync();
+      clearTimeout(checkTimer);
+      var label = currentLabel();
+      if (validate(label).ok) {
+        checkTimer = setTimeout(function () { runCheck(label); }, 400);
+      }
+    });
+
+    if (headless) {
+      cta.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (busy || cta.getAttribute("aria-disabled") === "true") return;
+        if (!o.connected) { if (o.onConnect) o.onConnect(); return; }
+        var label = currentLabel();
+        if (!validate(label).ok) return;
+        busy = true;
+        cta.setAttribute("aria-disabled", "true");
+        ctaText.textContent = "Confirm in wallet\u2026";
+        Promise.resolve(o.onSubmit({ label: label })).then(
+          function () {
+            busy = false;
+            cta.setAttribute("aria-disabled", "true");
+            ctaText.textContent = label + ".hoodfi.eth is yours";
+            setMsg("registered \u00b7 " + label + ".hoodfi.eth", "ok");
+          },
+          function (err) {
+            busy = false;
+            cta.setAttribute("aria-disabled", "false");
+            setMsg((err && err.shortMessage) || (err && err.message) || "that did not go through", "bad");
+            sync();
+          }
+        );
+      });
+    }
+
     if (o.label) { input.value = o.label; }
     sync();
+    if (headless && o.label && validate(o.label).ok) runCheck(o.label.toLowerCase());
 
     wrap.querySelector(".themebtn").addEventListener("click", function () {
       o.dark = !o.dark;
@@ -332,6 +457,12 @@
       width: o.width,
       height: o.height,
       fonts: o.fonts !== false && o.fonts !== "false",
+      // Headless: supplied by a host that owns its own wallet. Never settable from a
+      // data- attribute, because a function cannot come from markup.
+      connected: Boolean(o.connected),
+      onSubmit: o.onSubmit,
+      onCheck: o.onCheck,
+      onConnect: o.onConnect,
     };
   }
 
@@ -347,10 +478,31 @@
     var host = document.createElement("div");
     host.setAttribute("data-hoodfi-widget", "");
     el.appendChild(host);
-    return render(host, o);
+    render(host, o);
+
+    /**
+     * A handle, so a host framework can push state in without a remount.
+     *
+     * `update({connected:true})` after a wallet connects is the common case. It re-renders
+     * and carries the typed name across, the same way the theme toggle does — losing what
+     * someone had half-typed because their wallet finished connecting would be its own bug.
+     */
+    return {
+      el: host,
+      update: function (patch) {
+        var input = host.shadowRoot && host.shadowRoot.querySelector("input");
+        if (input) o.label = input.value;
+        for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) o[k] = patch[k];
+        render(host, o);
+        return this;
+      },
+      destroy: function () {
+        if (host.parentNode) host.parentNode.removeChild(host);
+      },
+    };
   }
 
-  window.HoodFiWidget = { mount: mount, version: "0.2.2" };
+  window.HoodFiWidget = { mount: mount, version: "0.3.0" };
 
   // auto-init: <script src="…" data-partner="0x…" data-accent="#ff6a00"></script>
   var script = document.currentScript;
