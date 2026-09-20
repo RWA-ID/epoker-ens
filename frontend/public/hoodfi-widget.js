@@ -319,6 +319,24 @@
       var sellable = v.ok && (!checked || checked.sellable);
 
       if (busy) return;
+
+      /*
+       * A registration the host has confirmed out of band.
+       *
+       * On mobile, signing means switching to the wallet app, which backgrounds the
+       * browser — and the OS is free to discard the page entirely. The transactions still
+       * land, because the wallet broadcast them; the promise waiting on them does not
+       * survive. So the host re-checks on return and tells us, rather than the success
+       * state depending on a callback that may never run.
+       */
+      if (o.claimed) {
+        setMsg("registered \u00b7 " + o.claimed + ".hoodfi.eth", "ok");
+        ctaText.textContent = o.claimed + ".hoodfi.eth is yours";
+        cta.setAttribute("aria-disabled", "true");
+        showPrice(false);
+        return;
+      }
+
       if (v.ok && checked && !checked.sellable) {
         setMsg(checked.reason || "not available", "bad");
       } else if (headless && v.ok) {
@@ -460,6 +478,7 @@
       // Headless: supplied by a host that owns its own wallet. Never settable from a
       // data- attribute, because a function cannot come from markup.
       connected: Boolean(o.connected),
+      claimed: o.claimed,
       onSubmit: o.onSubmit,
       onCheck: o.onCheck,
       onConnect: o.onConnect,
@@ -502,7 +521,7 @@
     };
   }
 
-  window.HoodFiWidget = { mount: mount, version: "0.3.0" };
+  window.HoodFiWidget = { mount: mount, version: "0.3.1" };
 
   // auto-init: <script src="…" data-partner="0x…" data-accent="#ff6a00"></script>
   var script = document.currentScript;
