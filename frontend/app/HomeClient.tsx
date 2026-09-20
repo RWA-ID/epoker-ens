@@ -25,6 +25,7 @@ import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Ticker } from '@/components/Ticker';
 import { Faq } from '@/components/Faq';
+import { HoodfiWidget } from '@/components/HoodfiWidget';
 
 const CHAIN_NAME = 'Robinhood Chain';
 
@@ -631,9 +632,31 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ============================ NAMES ============================ */}
+      <section id="name" className="mx-auto max-w-shell px-[22px] pt-[88px]">
+        <Eyebrow>04 — Your table name</Eyebrow>
+        <h2 className="hp-display hp-h2 mt-3 text-cream">
+          Sit down as a <span className="text-acid">name</span>, not an address.
+        </h2>
+        <div className="mt-8 grid gap-10 md:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+          <div>
+            <p className="max-w-[560px] text-[16.5px] leading-[1.6] text-muted">
+              A HoodFi name is a real ENS name on Robinhood Chain — the same chain the felt
+              runs on. Claim one and it shows at the table, in your wallet, and anywhere
+              else that reads ENS. Paid once, no renewals.
+            </p>
+            <p className="mt-4 max-w-[560px] text-[15px] leading-[1.6] text-muted">
+              Registration opens on hoodfi.name. HoodPoker earns a small margin on every
+              name claimed through here.
+            </p>
+          </div>
+          <HoodfiWidget />
+        </div>
+      </section>
+
       {/* ============================= FAQ ============================= */}
       <section id="faq" className="mx-auto max-w-faq px-[22px] pb-[88px] pt-[88px]">
-        <Eyebrow>04 — Straight answers</Eyebrow>
+        <Eyebrow>05 — Straight answers</Eyebrow>
         <h2 className="hp-display hp-h2 mt-3 text-cream">FAQ</h2>
         <Faq />
       </section>
