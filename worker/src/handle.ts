@@ -81,47 +81,78 @@ export function isHoodfiName(name: string): boolean {
  * Returns the name if this address really owns it, otherwise null.
  * Non-hoodfi names (mainnet ENS) are not checked here — see verifyHandle.
  */
+export type OwnerCheck = 'owned' | 'not-owned' | 'unavailable';
+
+/**
+ * Ask the registry who owns a name.
+ *
+ * Three answers, not two. The public Robinhood RPC refuses a share of calls
+ * from Cloudflare's egress (measured live: one name answered, another failed
+ * the same second), and collapsing that into `false` demoted real players to
+ * a bare address at the table. `unavailable` lets the caller keep the last
+ * answer it trusted instead of publishing a wrong one.
+ */
 export async function ownsHoodfiName(
   address: string,
   name: string,
   rpcUrl?: string,
-): Promise<boolean> {
-  if (!isHoodfiName(name)) return false;
-  try {
-    const client = createPublicClient({
-      chain: robinhood,
-      transport: http(rpcUrl ?? robinhood.rpcUrls.default.http[0]),
-    });
-    const owner = await client.readContract({
-      address: HOODFI_REGISTRY,
-      abi: OWNER_ABI,
-      functionName: 'owner',
-      args: [namehash(name)],
-    });
-    return owner.toLowerCase() === address.toLowerCase();
-  } catch {
-    // Throttled or unreachable — treat as unverified, never as a pass.
-    return false;
+): Promise<OwnerCheck> {
+  if (!isHoodfiName(name)) return 'not-owned';
+  const client = createPublicClient({
+    chain: robinhood,
+    transport: http(rpcUrl ?? robinhood.rpcUrls.default.http[0]),
+  });
+  // The failures are transient, so a couple of quick retries clear most of
+  // them well inside the time a player waits for a socket.
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const owner = await client.readContract({
+        address: HOODFI_REGISTRY,
+        abi: OWNER_ABI,
+        functionName: 'owner',
+        args: [namehash(name)],
+      });
+      return owner.toLowerCase() === address.toLowerCase() ? 'owned' : 'not-owned';
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
   }
+  console.error('ownsHoodfiName unavailable', name, String(lastErr).slice(0, 200));
+  return 'unavailable';
 }
 
-/** hoodfi avatar text record; null on any failure. */
-async function hoodfiAvatar(name: string, rpcUrl?: string): Promise<string | null> {
-  try {
-    const client = createPublicClient({
-      chain: robinhood,
-      transport: http(rpcUrl ?? robinhood.rpcUrls.default.http[0]),
-    });
-    const record = await client.readContract({
-      address: HOODFI_REGISTRY,
-      abi: OWNER_ABI,
-      functionName: 'text',
-      args: [namehash(name), 'avatar'],
-    });
-    return cleanAvatar(record);
-  } catch {
-    return null;
+/**
+ * hoodfi avatar text record.
+ *
+ * `{ known: false }` means the read never landed — distinct from a name that
+ * genuinely has no avatar. The caller must not cache the former as "no
+ * avatar", or one throttled read wipes a player's face until they set it
+ * again. Same retry as the owner check, for the same reason.
+ */
+async function hoodfiAvatar(
+  name: string,
+  rpcUrl?: string,
+): Promise<{ known: true; avatar: string | null } | { known: false }> {
+  const client = createPublicClient({
+    chain: robinhood,
+    transport: http(rpcUrl ?? robinhood.rpcUrls.default.http[0]),
+  });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const record = await client.readContract({
+        address: HOODFI_REGISTRY,
+        abi: OWNER_ABI,
+        functionName: 'text',
+        args: [namehash(name), 'avatar'],
+      });
+      return { known: true, avatar: cleanAvatar(record) };
+    } catch {
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
   }
+  return { known: false };
 }
 
 /**
@@ -158,17 +189,48 @@ export async function verifyHandle(
   claimed: string | null | undefined,
   rpc: { robinhood?: string; mainnet?: string } = {},
 ): Promise<VerifiedHandle | null> {
+  const checked = await checkHandle(address, claimed, rpc);
+  return checked.status === 'verified' ? { handle: checked.handle, avatar: checked.avatar } : null;
+}
+
+/**
+ * Like `verifyHandle`, but says *why* it couldn't verify: `unverified` means
+ * the chain answered and the name isn't theirs, `unavailable` means we never
+ * got an answer. Only the first should cost a player their name.
+ */
+export type HandleCheck =
+  /** `avatarKnown: false` = the avatar read failed; keep whatever was cached. */
+  | { status: 'verified'; handle: string; avatar: string | null; avatarKnown: boolean }
+  | { status: 'unverified' }
+  | { status: 'unavailable' };
+
+export async function checkHandle(
+  address: Address | string,
+  claimed: string | null | undefined,
+  rpc: { robinhood?: string; mainnet?: string } = {},
+): Promise<HandleCheck> {
   const name = String(claimed ?? '').trim().toLowerCase();
-  if (!name || name.length > 100) return null;
+  if (!name || name.length > 100) return { status: 'unverified' };
 
   if (name.endsWith('.hoodfi.eth')) {
-    if (!(await ownsHoodfiName(address, name, rpc.robinhood))) return null;
-    return { handle: name, avatar: await hoodfiAvatar(name, rpc.robinhood) };
+    const owned = await ownsHoodfiName(address, name, rpc.robinhood);
+    if (owned === 'unavailable') return { status: 'unavailable' };
+    if (owned === 'not-owned') return { status: 'unverified' };
+    const av = await hoodfiAvatar(name, rpc.robinhood);
+    return {
+      status: 'verified',
+      handle: name,
+      avatar: av.known ? av.avatar : null,
+      avatarKnown: av.known,
+    };
   }
 
   if (/^(?:[a-z0-9-]{1,63}\.)+eth$/.test(name)) {
-    return verifyMainnetName(address, name, rpc.mainnet);
+    const mainnet = await verifyMainnetName(address, name, rpc.mainnet);
+    return mainnet
+      ? { status: 'verified', handle: mainnet.handle, avatar: mainnet.avatar, avatarKnown: true }
+      : { status: 'unverified' };
   }
 
-  return null;
+  return { status: 'unverified' };
 }

@@ -19,7 +19,7 @@ import { evaluate7 } from './poker/evaluator';
 import { settlePots, Contributor } from './poker/pots';
 import type { Env } from './env';
 import { sanitizeChat } from './chat';
-import { cleanAvatar, verifyHandle, type VerifiedHandle } from './handle';
+import { cleanAvatar, checkHandle, type VerifiedHandle } from './handle';
 
 /** How long a table may sit empty before it is closed and delisted. */
 const EMPTY_TABLE_CLOSE_MS = 60_000;
@@ -241,16 +241,49 @@ export class TableDO implements DurableObject {
       // Cache miss or pre-migration schema — fall through to the live check.
     }
 
-    const verified = await verifyHandle(address, name, { mainnet: this.env.MAINNET_RPC });
-    if (verified) {
-      await this.env.DB.prepare(
-        `INSERT INTO players (address, handle, avatar, handle_checked, created_at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(address) DO UPDATE SET handle = excluded.handle, avatar = excluded.avatar,
-           handle_checked = excluded.handle_checked`,
-      ).bind(address, verified.handle, verified.avatar, Date.now(), Date.now())
-        .run().catch(() => { /* best-effort */ });
+    const checked = await checkHandle(address, name, { mainnet: this.env.MAINNET_RPC });
+
+    // The chain never answered. A player who verified this same name before
+    // keeps it rather than being demoted to a bare address by a throttled
+    // RPC; `handle_checked` is left alone so the next socket re-verifies.
+    if (checked.status === 'unavailable') {
+      try {
+        const row = await this.env.DB.prepare(
+          'SELECT handle, avatar FROM players WHERE address = ? AND handle = ?',
+        ).bind(address, name).first<{ handle: string; avatar: string | null }>();
+        if (row?.handle) return { handle: row.handle, avatar: cleanAvatar(row.avatar) };
+      } catch { /* no cached pass — fall through to no handle */ }
+      return null;
     }
-    return verified;
+
+    if (checked.status !== 'verified') return null;
+
+    // The name is proven. The avatar is a second RPC call, and when *it* is
+    // the one that fails we keep the face already on file rather than
+    // blanking it: `COALESCE` only when the read never landed, so an avatar
+    // the owner actually cleared still clears.
+    const keepOldAvatar = !checked.avatarKnown;
+    let avatar = checked.avatar;
+    if (keepOldAvatar) {
+      const row = await this.env.DB.prepare(
+        'SELECT avatar FROM players WHERE address = ? AND handle = ?',
+      ).bind(address, checked.handle).first<{ avatar: string | null }>().catch(() => null);
+      avatar = cleanAvatar(row?.avatar ?? null);
+    }
+
+    await this.env.DB.prepare(
+      keepOldAvatar
+        ? `INSERT INTO players (address, handle, avatar, handle_checked, created_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(address) DO UPDATE SET handle = excluded.handle,
+             avatar = COALESCE(players.avatar, excluded.avatar),
+             handle_checked = excluded.handle_checked`
+        : `INSERT INTO players (address, handle, avatar, handle_checked, created_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(address) DO UPDATE SET handle = excluded.handle, avatar = excluded.avatar,
+             handle_checked = excluded.handle_checked`,
+    ).bind(address, checked.handle, avatar, Date.now(), Date.now())
+      .run().catch(() => { /* best-effort */ });
+
+    return { handle: checked.handle, avatar };
   }
 
   private acceptSocket(ws: WebSocket, session: Session) {
