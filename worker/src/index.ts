@@ -70,6 +70,15 @@ async function underLimit(limiter: RateLimiter | undefined, key: string): Promis
 /** Daily chip claim amount. */
 const DAILY_CHIPS = 5000;
 
+/**
+ * The leaderboard ranks profit *per hand*, not total profit, so that a bigger
+ * daily allowance (what a membership would buy) pays for more play without
+ * buying rank. A raw average would put one lucky hand on top, so each player
+ * is smoothed toward zero by this many phantom break-even hands: a short run
+ * has to be very good to rank, a long one converges on its true average.
+ */
+const RANK_PRIOR_HANDS = 20;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -222,8 +231,8 @@ export default {
           `SELECT address, handle, avatar, net_profit AS netProfit,
                   hands_played AS handsPlayed, hands_won AS handsWon, biggest_pot AS biggestPot
            FROM players WHERE hands_played > 0
-           ORDER BY net_profit DESC LIMIT 100`,
-        ).all();
+           ORDER BY (net_profit * 1.0 / (hands_played + ?)) DESC LIMIT 100`,
+        ).bind(RANK_PRIOR_HANDS).all();
         return json({ leaderboard: results });
       }
 

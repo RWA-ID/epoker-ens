@@ -204,7 +204,10 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
       window.removeEventListener('online', onVisible);
       discard();
     };
-  }, [tableId, identity?.address, identity?.token]); // eslint-disable-line react-hooks/exhaustive-deps
+    // The handle is in the list because the server reads it only on connect:
+    // a name that resolves after the socket opened is sent by reconnecting.
+    // The seat is held across it, like any other reconnect.
+  }, [tableId, identity?.address, identity?.token, identity?.handle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMsg = useCallback((msg: ClientMessage) => {
     const ws = wsRef.current;

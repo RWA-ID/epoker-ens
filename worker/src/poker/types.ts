@@ -127,7 +127,7 @@ export type ServerMessage =
 
 /** A hand only starts once this many players are seated (product requirement: bring friends). */
 export const MIN_PLAYERS = 4;
-export const MAX_PLAYERS = 9;
+export const MAX_PLAYERS = 8;
 /** Seconds a player has to act before being auto-checked/folded. */
 export const ACTION_SECONDS = 30;
 /** Pause between hands so players can read the result. */

@@ -46,7 +46,7 @@ const HOW_STEPS = [
   {
     n: '1',
     title: 'Connect',
-    body: 'One tap on Robinhood chain sets your handle and drops 10,000 virtual chips in your bankroll. No deposit, ever.',
+    body: 'Sign in with your wallet and your HoodFi name becomes your table handle, checked against Robinhood Chain. 10,000 virtual chips to start. No deposit, ever.',
   },
   {
     n: '2',
@@ -62,7 +62,7 @@ const HOW_STEPS = [
 
 const HERO_STATS = [
   { value: '10,000', label: 'Free starting chips' },
-  { value: '9', label: 'Seats per table' },
+  { value: '8', label: 'Seats per table' },
   { value: '0', label: 'Tokens to hold' },
   { value: '24/7', label: 'Tables running' },
 ];
@@ -218,7 +218,7 @@ export default function HomePage() {
           <span className="inline-flex items-center gap-2 rounded-full border border-acid/45 bg-acid/[0.07] px-[13px] py-[7px]">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-acid" />
             <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-acid">
-              Now dealing on {CHAIN_NAME}
+              Now dealing · names on {CHAIN_NAME}
             </span>
           </span>
 
@@ -228,8 +228,9 @@ export default function HomePage() {
           </h1>
 
           <p className="mt-6 max-w-[520px] text-[17.5px] leading-[1.6] text-muted">
-            No tokens to hold. No buy-ins. No real value — just the fastest free poker table on
-            Robinhood chain. Grab a seat, stack virtual chips, and run up the leaderboard.
+            No tokens to hold. No buy-ins. No real value — just the fastest free poker table
+            going. Play under your HoodFi name from Robinhood Chain, stack virtual chips, and
+            run up the leaderboard.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-3">
@@ -414,8 +415,8 @@ export default function HomePage() {
                     <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
                       Players (table size)
                     </label>
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {[2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {[2, 3, 4, 5, 6, 7, 8].map((n) => (
                         <button
                           key={n}
                           onClick={() => setMaxPlayers(n)}
@@ -526,8 +527,8 @@ export default function HomePage() {
             <Eyebrow>03 — Season ranks</Eyebrow>
             <h2 className="hp-display hp-h2 mt-3 text-cream">Leaderboard</h2>
             <p className="mt-4 text-[16px] leading-[1.6] text-muted">
-              Every hand you win moves the board. Seasons reset monthly — chips are virtual,
-              bragging rights are not.
+              Ranked by profit per hand, so a fat bankroll can’t buy the top spot. Seasons reset
+              monthly — chips are virtual, bragging rights are not.
             </p>
 
             <div className="mt-6 rounded-card border border-acid/30 bg-acid/[0.05] p-5">
@@ -666,7 +667,7 @@ export default function HomePage() {
 
 /** One table in the lobby grid. */
 function TableCard({ table }: { table: LobbyTable }) {
-  const max = 9;
+  const max = 8;
   const bigBlind = table.smallBlind * 2;
   const live = table.status === 'playing';
   const needs = Math.max(0, 4 - table.seats);

@@ -10,11 +10,11 @@ const ITEMS = [
   },
   {
     q: 'Do I need a wallet?',
-    a: 'Connecting a wallet on Robinhood chain gives you a persistent handle, bankroll and leaderboard record. You can also watch any public table without connecting.',
+    a: 'Connecting a wallet gives you a persistent handle, bankroll and leaderboard record — and if you hold a HoodFi name on Robinhood Chain, you play under it. You can also watch any public table without connecting.',
   },
   {
     q: 'How many players start a hand?',
-    a: 'Public tables deal at four seated players. Private tables are sized by the host (2–9 seats) and deal as soon as they fill, down to heads-up.',
+    a: 'Public tables deal at four seated players. Private tables are sized by the host (2–8 seats) and deal as soon as they fill, down to heads-up.',
   },
   {
     q: 'Can the house see my cards?',

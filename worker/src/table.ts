@@ -43,7 +43,8 @@ const LOG_KEEP = 80;
 const LOG_REPLAY = 40;
 
 /** Seat order bots take on the practice table — spread around the felt. */
-const BOT_SEAT_ORDER = [4, 2, 6, 0, 8, 3, 5, 1, 7];
+// Back row and sides first, so the two front chairs stay free for humans.
+const BOT_SEAT_ORDER = [3, 4, 1, 6, 2, 5, 0, 7];
 
 interface Player {
   seat: number;
@@ -92,7 +93,7 @@ interface TableConfig {
   smallBlind: number;
   /** Private = unlisted + whitelist-only seating. Absent on legacy tables. */
   isPrivate?: boolean;
-  /** Creator-chosen table size (2–9). Absent on legacy tables → MAX_PLAYERS. */
+  /** Creator-chosen table size (2–8). Absent on legacy tables → MAX_PLAYERS. */
   maxPlayers?: number;
   /** Invited players (private tables only). Always includes the creator. */
   whitelist?: WhitelistEntry[];
@@ -221,6 +222,9 @@ export class TableDO implements DurableObject {
     if (!name) return null;
 
     const TTL = 6 * 3600 * 1000;
+    // A missing avatar is re-read sooner: the avatar read can be throttled
+    // while the ownership read passed, and a blank face shouldn't stick 6h.
+    const NO_AVATAR_TTL = 30 * 60 * 1000;
     try {
       const row = await this.env.DB.prepare(
         'SELECT handle, avatar, handle_checked AS checked FROM players WHERE address = ?',
@@ -229,7 +233,7 @@ export class TableDO implements DurableObject {
       if (
         row?.handle === name &&
         typeof row.checked === 'number' &&
-        Date.now() - row.checked < TTL
+        Date.now() - row.checked < (row.avatar ? TTL : NO_AVATAR_TTL)
       ) {
         return { handle: name, avatar: cleanAvatar(row.avatar) };
       }
@@ -378,7 +382,8 @@ export class TableDO implements DurableObject {
   private get bigBlind() { return this.config!.smallBlind * 2; }
   private get buyIn() { return this.bigBlind * BUYIN_BB; }
   /** Seats at this table (creator-chosen on private tables). */
-  private get maxSeats() { return this.config?.maxPlayers ?? MAX_PLAYERS; }
+  // Clamped: tables created while the cap was 9 still have 9 in storage.
+  private get maxSeats() { return Math.min(this.config?.maxPlayers ?? MAX_PLAYERS, MAX_PLAYERS); }
   /**
    * Players needed for a hand. Public tables keep the 4-player product
    * rule; private tables start once the (smaller) table fills up to its

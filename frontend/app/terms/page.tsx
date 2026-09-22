@@ -53,7 +53,7 @@ export default function TermsPage() {
         <p>
           A free multiplayer Texas Hold&rsquo;em game played with virtual chips. Public tables
           deal at four seated players; private tables are sized by their host between two and
-          nine seats. There is no buy-in and no payout of any kind — see the{' '}
+          eight seats. There is no buy-in and no payout of any kind — see the{' '}
           <Link href="/disclaimer/" className="text-acid underline underline-offset-4">
             Disclaimer
           </Link>{' '}

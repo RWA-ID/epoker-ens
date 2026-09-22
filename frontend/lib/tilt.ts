@@ -39,6 +39,26 @@ export async function requestNativeFullscreen(): Promise<boolean> {
   }
 }
 
+/**
+ * Android Chrome can pin a full-screen page to landscape — the real thing, no
+ * CSS rotation needed. Only allowed while in native full screen, and iOS has
+ * no such API, so false means "fall back to Rotate".
+ */
+export async function lockLandscape(): Promise<boolean> {
+  try {
+    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    if (!o?.lock) return false;
+    await o.lock('landscape');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function unlockOrientation() {
+  try { screen.orientation?.unlock?.(); } catch { /* not locked */ }
+}
+
 export async function exitNativeFullscreen(): Promise<void> {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -52,12 +72,15 @@ const ROTATE_KEY = 'epoker:rotate';
 /** 0 = upright, 90 = turned clockwise, 270 = anticlockwise. */
 export type Rotation = 0 | 90 | 270;
 
-export function readRotatePref(): Rotation {
+/** The player's last choice, or null if they never pressed Rotate. */
+export function readRotatePref(): Rotation | null {
   try {
-    const v = Number(localStorage.getItem(ROTATE_KEY));
+    const raw = localStorage.getItem(ROTATE_KEY);
+    if (raw === null) return null;
+    const v = Number(raw);
     return v === 90 || v === 270 ? v : 0;
   } catch {
-    return 0;
+    return null;
   }
 }
 

@@ -31,7 +31,7 @@ import { TableDrawer, TablePanel, type PanelTab } from '@/components/TablePanel'
 import { ChatIcon, CollapseIcon, ExpandIcon, LinkIcon, RotateIcon, SoundIcon } from '@/components/TableIcons';
 import {
   TILT_QUERY, useMediaQuery, requestNativeFullscreen, exitNativeFullscreen,
-  readRotatePref, writeRotatePref, nextRotation, type Rotation,
+  lockLandscape, unlockOrientation, readRotatePref, writeRotatePref, nextRotation, type Rotation,
 } from '@/lib/tilt';
 
 const STAGE_LABEL: Record<string, string> = {
@@ -69,7 +69,7 @@ export default function TablePage() {
 function TableInner() {
   const tableId = useSearchParams().get('id');
   const open = useConnect();
-  const { address, isConnected, isRestoring, handle } = useIdentity();
+  const { address, isConnected, isRestoring, handle, isLoadingHandle } = useIdentity();
   const { signMessage } = useWallet();
 
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -114,9 +114,21 @@ function TableInner() {
     signIn();
   }, [isConnected, address, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hold the socket until the name lookup settles. The server only reads the
+  // handle when a socket opens, so connecting while the hoodfi lookup is still
+  // in flight seated the player as a bare address. Bounded: a throttled RPC
+  // shouldn't keep anyone off the table.
+  const [handleWaitOver, setHandleWaitOver] = useState(false);
+  useEffect(() => {
+    setHandleWaitOver(false);
+    const t = setTimeout(() => setHandleWaitOver(true), 6000);
+    return () => clearTimeout(t);
+  }, [address]);
+  const handleReady = !isLoadingHandle || handleWaitOver;
+
   const identity = useMemo(
-    () => (address && session ? { address: address.toLowerCase(), token: session.token, handle } : null),
-    [address, session, handle],
+    () => (address && session && handleReady ? { address: address.toLowerCase(), token: session.token, handle } : null),
+    [address, session, handleReady, handle],
   );
 
   const table = useTableSocket(tableId, identity);
@@ -178,7 +190,7 @@ export function TableScreen({
   const [muted, setMutedState] = useState(false);
   const [copied, setCopied] = useState(false);
   const [full, setFull] = useState(false);
-  const [rotatePref, setRotatePref] = useState<Rotation>(0);
+  const [rotatePref, setRotatePref] = useState<Rotation | null>(null);
   const [panelTab, setPanelTab] = useState<PanelTab>('chat');
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Chat replayed on connect is history, not news — only later lines badge.
@@ -187,6 +199,10 @@ export function TableScreen({
   const tilt = useMediaQuery(TILT_QUERY);
   const portrait = useMediaQuery('(orientation: portrait)');
   const desktop = useMediaQuery('(min-width: 1024px)');
+  const touch = useMediaQuery('(pointer: coarse)');
+  // Full screen on a phone held upright means "give me a landscape table", so
+  // until the player picks otherwise it turns sideways by default.
+  const rotation: Rotation = rotatePref ?? (touch ? 90 : 0);
 
   useEffect(() => {
     setMutedState(isMuted());
@@ -209,6 +225,7 @@ export function TableScreen({
     const onChange = () => {
       if (!document.fullscreenElement && nativeFull.current) {
         nativeFull.current = false;
+        unlockOrientation();
         setFull(false);
       }
     };
@@ -220,11 +237,15 @@ export function TableScreen({
     if (full) {
       setFull(false);
       nativeFull.current = false;
+      unlockOrientation();
       await exitNativeFullscreen();
       return;
     }
     setFull(true);
     nativeFull.current = await requestNativeFullscreen();
+    // Android turns the real screen; everywhere else the CSS rotation
+    // (`rotation` above) takes over because the page stays portrait.
+    if (nativeFull.current && touch) await lockLandscape();
   };
 
   // Auto-dismiss transient errors (illegal action, seat taken, …).
@@ -235,9 +256,13 @@ export function TableScreen({
   }, [table.error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const docked = desktop && !layer;
+  // Desktop full screen has room beside a 3:2 felt, so the chat lives in that
+  // column instead of leaving it black with the dock alone at the bottom.
+  // (A landscape desktop is never the CSS-rotated case, which is portrait.)
+  const sideDock = layer && desktop && !portrait;
   // Everything in the chat counts as read while you can see it.
   const lastChatTs = table.chat[table.chat.length - 1]?.ts ?? 0;
-  const chatVisible = docked ? panelTab === 'chat' : drawerOpen && panelTab === 'chat';
+  const chatVisible = docked || sideDock ? panelTab === 'chat' : drawerOpen && panelTab === 'chat';
   useEffect(() => {
     if (chatVisible) setChatSeenTs(lastChatTs);
   }, [chatVisible, lastChatTs]);
@@ -262,7 +287,7 @@ export function TableScreen({
 
   const me = state.yourSeat !== null ? state.seats.find((s) => s.seat === state.yourSeat) : undefined;
   const inHand = state.stage !== 'waiting';
-  const rotated = full && portrait && rotatePref !== 0 ? rotatePref : null;
+  const rotated = full && portrait && rotation !== 0 ? rotation : null;
   const wide = layer && (!!rotated || !portrait);
 
   const panel = (onClose?: () => void) => (
@@ -317,7 +342,7 @@ export function TableScreen({
             label={rotated ? 'Turn back' : 'Rotate'}
             active={!!rotated}
             onClick={() => {
-              const next = nextRotation(rotatePref);
+              const next = nextRotation(rotation);
               setRotatePref(next);
               writeRotatePref(next);
             }}
@@ -330,7 +355,7 @@ export function TableScreen({
             {full ? <CollapseIcon /> : <ExpandIcon />}
           </BarButton>
         )}
-        {!docked && (
+        {!docked && !sideDock && (
           <BarButton label="Chat" onClick={() => setDrawerOpen(true)} badge={unread}>
             <ChatIcon />
           </BarButton>
@@ -390,10 +415,22 @@ export function TableScreen({
   if (layer) {
     return (
       <div className="fixed inset-0 z-[60] overflow-hidden bg-night-950">
+        {/* Backdrop: the felt itself, blown up and blurred, so the bands a
+            3:2 table leaves on a wide screen read as the room round it
+            rather than dead black. Same image as the felt — nothing extra
+            to load. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div
+            className="absolute -inset-16 scale-110 bg-cover bg-center opacity-50 blur-3xl saturate-150"
+            style={{ backgroundImage: "url('/table-live.jpg')" }}
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,12,10,0.2)_0%,rgba(10,12,10,0.85)_75%)]" />
+        </div>
         <div
           style={rotated ? rotatedStyle(rotated) : undefined}
           className={cn(
-            'flex flex-col gap-2 p-2',
+            // `relative` lifts the table above the absolute backdrop.
+            'relative flex flex-col gap-2 p-2',
             !rotated && 'h-full w-full pb-[max(8px,env(safe-area-inset-bottom))] pl-[max(8px,env(safe-area-inset-left))] pr-[max(8px,env(safe-area-inset-right))] pt-[max(8px,env(safe-area-inset-top))]',
           )}
         >
@@ -405,7 +442,8 @@ export function TableScreen({
             <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center pb-7 [container-type:size]">
               <div className="w-[min(100cqw,150cqh)]">{felt}</div>
             </div>
-            <div className={cn('flex flex-col justify-end', wide ? 'w-[clamp(220px,32%,320px)] shrink-0' : 'shrink-0')}>
+            <div className={cn('flex flex-col justify-end gap-2', wide ? 'w-[clamp(220px,32%,320px)] shrink-0' : 'shrink-0')}>
+              {sideDock && <div className="relative min-h-0 flex-1">{panel()}</div>}
               <ActionBar state={state} onAct={table.act} compact columns={wide ? 2 : 4} />
             </div>
           </div>

@@ -11,7 +11,7 @@
 import Link from 'next/link';
 
 /** Single source of truth for the "last updated" stamp on all three pages. */
-export const LEGAL_UPDATED = '17 September 2026';
+export const LEGAL_UPDATED = '22 September 2026';
 
 const PAGES = [
   { href: '/terms/', label: 'Terms' },

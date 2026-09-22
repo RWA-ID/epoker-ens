@@ -33,7 +33,7 @@ const mono = IBM_Plex_Mono({
 // live in public/ (not app/) so the build never decodes the hand-built ICO.
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: 'HoodPoker — free Texas Hold’em on Robinhood Chain',
+  title: 'HoodPoker — free Texas Hold’em, played under your name',
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },

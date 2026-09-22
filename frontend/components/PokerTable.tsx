@@ -4,9 +4,8 @@
  *
  * The felt is the HoodPoker table render from the design bundle
  * (`public/table-live.jpg`, 1536x1024 = 3:2, re-encoded from the 2.9MB PNG to
- * ~408KB JPEG so a fresh IPFS pin stays warm). Seat pills are positioned over
- * the chairs in that photograph, so SEAT_POS is tied to this exact image —
- * swapping the art means re-measuring the positions.
+ * ~408KB JPEG so a fresh IPFS pin stays warm). SEAT_POS is laid round the
+ * rail of this exact image — swapping the art means re-checking the positions.
  */
 import type { ReactNode } from 'react';
 import type { TableView, Card } from '@/lib/types';
@@ -15,24 +14,27 @@ import { PlayingCard } from './PlayingCard';
 import { Seat } from './Seat';
 
 /**
- * Percentage positions of the nine chairs in table-live.jpg, clockwise from
- * the near-left foreground seat. The table is shot at an angle, so these are
- * measured off the image rather than derived from an ellipse: the back row
- * sits high and tight, the two foreground chairs low and wide.
+ * Eight seats spaced evenly round the rail, clockwise from the near-left
+ * foreground chair: two in front, two up each side, two across the back.
+ * Nothing sits at the back centre — a seat there hung its cards straight
+ * onto the board.
  *
- * Side chairs are edge-anchored so their pills grow inward and stay on screen.
+ * Each seat's hole cards sit on the side facing the felt (`cards`), never
+ * toward the middle of the board: the back pair tuck theirs outward, the
+ * sides inward, the front pair above. Side seats are edge-anchored so their
+ * pills grow inward and stay on screen. `top` is the centre of the seat.
  */
 type SeatAnchor = 'center' | 'left' | 'right';
-const SEAT_POS: Array<{ left: string; top: string; anchor: SeatAnchor }> = [
-  { left: '18%', top: '85%', anchor: 'center' }, // 0 near left (foreground)
-  { left: '3%', top: '52%', anchor: 'left' },    // 1 left side
-  { left: '16%', top: '42%', anchor: 'center' }, // 2 back far left
-  { left: '32%', top: '39%', anchor: 'center' }, // 3 back left
-  { left: '54%', top: '38%', anchor: 'center' }, // 4 back centre
-  { left: '74%', top: '39%', anchor: 'center' }, // 5 back right
-  { left: '90%', top: '42%', anchor: 'center' }, // 6 back far right
-  { left: '98%', top: '49%', anchor: 'right' },  // 7 right side
-  { left: '80%', top: '84%', anchor: 'center' }, // 8 near right (foreground)
+type CardSide = 'above' | 'left' | 'right';
+const SEAT_POS: Array<{ left: string; top: string; anchor: SeatAnchor; cards: CardSide }> = [
+  { left: '24%', top: '80%', anchor: 'center', cards: 'above' }, // 0 front left
+  { left: '1.5%', top: '64%', anchor: 'left', cards: 'right' },  // 1 left, low
+  { left: '3.5%', top: '41%', anchor: 'left', cards: 'right' },  // 2 left, high
+  { left: '29%', top: '27%', anchor: 'center', cards: 'left' },  // 3 back left
+  { left: '71%', top: '27%', anchor: 'center', cards: 'right' }, // 4 back right
+  { left: '96.5%', top: '41%', anchor: 'right', cards: 'left' }, // 5 right, high
+  { left: '98.5%', top: '64%', anchor: 'right', cards: 'left' }, // 6 right, low
+  { left: '76%', top: '80%', anchor: 'center', cards: 'above' }, // 7 front right
 ];
 
 const ANCHOR_CLASS: Record<SeatAnchor, string> = {
@@ -42,19 +44,17 @@ const ANCHOR_CLASS: Record<SeatAnchor, string> = {
 };
 
 /**
- * Which of the 9 chairs are used for a given table size, in clockwise seat
- * order — smaller private tables spread out around the table instead of
- * clustering on one side.
+ * Which of the 8 seats a smaller private table uses, in clockwise seat order,
+ * so a short table spreads round the felt instead of bunching on one side.
  */
 const SEAT_LAYOUTS: Record<number, number[]> = {
-  2: [0, 5],
-  3: [0, 3, 6],
-  4: [0, 2, 5, 8],
-  5: [0, 2, 4, 6, 8],
-  6: [0, 2, 3, 5, 7, 8],
-  7: [0, 1, 2, 4, 5, 6, 8],
-  8: [0, 1, 2, 3, 4, 6, 7, 8],
-  9: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+  2: [0, 4],
+  3: [0, 3, 5],
+  4: [0, 2, 4, 6],
+  5: [0, 2, 3, 5, 6],
+  6: [0, 1, 3, 4, 6, 7],
+  7: [0, 1, 2, 3, 4, 5, 6],
+  8: [0, 1, 2, 3, 4, 5, 6, 7],
 };
 
 export function PokerTable({
@@ -70,7 +70,7 @@ export function PokerTable({
   const seatMap = new Map(state.seats.map((s) => [s.seat, s]));
   const inHand = state.stage !== 'waiting';
   const canSit = state.canSit && state.yourSeat === null && state.seats.length < state.maxPlayers;
-  const layout = SEAT_LAYOUTS[state.maxPlayers] ?? SEAT_LAYOUTS[9];
+  const layout = SEAT_LAYOUTS[Math.min(state.maxPlayers, 8)] ?? SEAT_LAYOUTS[8];
 
   return (
     <div className="relative mx-auto w-full max-w-6xl select-none">
@@ -160,16 +160,14 @@ export function PokerTable({
         {children}
       </div>
 
-      {/* Seats, positioned over the chairs (outside the clipped image so pills
-          are never cut off). The pill sits on the chair; cards hang below it
-          toward the felt. */}
+      {/* Seats, outside the clipped image so pills are never cut off. */}
       {layout.map((posIdx, seatIdx) => {
         const pos = SEAT_POS[posIdx];
         return (
           <div
             key={seatIdx}
             className={cn(
-              'absolute z-10 -translate-y-[18px] sm:-translate-y-[24px] tilt:-translate-y-[18px]',
+              'absolute z-10 -translate-y-1/2',
               ANCHOR_CLASS[pos.anchor],
             )}
             style={{ left: pos.left, top: pos.top }}
@@ -180,6 +178,7 @@ export function PokerTable({
               isYou={state.yourSeat === seatIdx}
               inHand={inHand}
               deadline={state.actionDeadline}
+              cardSide={pos.cards}
               onSit={canSit && !seatMap.get(seatIdx) ? () => onSit(seatIdx) : undefined}
             />
           </div>

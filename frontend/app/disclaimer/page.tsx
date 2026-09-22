@@ -66,9 +66,9 @@ export default function DisclaimerPage() {
         <p>
           HoodPoker is an independent community project. It is not affiliated with, endorsed
           by, sponsored by or connected to Robinhood Markets, Inc. or any of its subsidiaries.
-          The game runs on Robinhood Chain, a public network; referring to the network it runs
-          on does not imply any relationship with its operators. All trademarks belong to
-          their respective owners.
+          Player names are read from Robinhood Chain, a public network; referring to a network
+          we read from does not imply any relationship with its operators. All trademarks
+          belong to their respective owners.
         </p>
       </Clause>
 

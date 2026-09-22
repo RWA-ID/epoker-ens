@@ -14,7 +14,7 @@ const ITEMS = [
   'Virtual chips only',
   'Hands deal at 4 players',
   'Season 1 live',
-  'Built on Robinhood chain',
+  'Names on Robinhood chain',
 ];
 
 function Half() {
