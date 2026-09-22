@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Ticker } from '@/components/Ticker';
 import { Faq } from '@/components/Faq';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
+import { PassChecker } from '@/components/PassChecker';
 
 const CHAIN_NAME = 'Robinhood Chain';
 
@@ -58,6 +59,21 @@ const HOW_STEPS = [
     title: 'Run it up',
     body: "Full Texas Hold'em with side pots, 30-second action timers and table chat. Win hands, climb the season board.",
   },
+];
+
+/**
+ * House Pass perks. Every one of these is table time, hosting or cosmetics —
+ * nothing here changes the cards, the odds or the money (there is no money).
+ * Numbers mirror the worker: DAILY_CHIPS is 5,000 on a 24h cooldown today.
+ */
+const PASS_PERKS = [
+  { title: '15,000 daily chips', body: 'three times the free drop, claimable every 12 hours instead of 24.' },
+  { title: 'Bust-out top-up', body: 'run your stack to zero and get back in once a day, without waiting for the drop.' },
+  { title: 'Team tournaments', body: 'build a team and host bracket nights. Anyone can play in them — members run them.' },
+  { title: 'A room that stays', body: 'a permanent private table with your name on it, reserved seats and a spectator link.' },
+  { title: 'Member cosmetics', body: 'a badge on your seat, alternate card backs and felt tints. Never an edge in a hand.' },
+  { title: 'Your numbers', body: 'full hand history export, per-opponent stats and season flair on the board.' },
+  { title: 'First through the door', body: 'new modes — sit-and-go, Omaha — open to passes before anyone else.' },
 ];
 
 const HERO_STATS = [
@@ -655,9 +671,84 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ========================== House Pass ========================== */}
+      <section id="pass" className="mx-auto max-w-shell px-[22px] pt-[88px]">
+        <Eyebrow>05 — House Pass</Eyebrow>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <h2 className="hp-display hp-h2 text-cream">
+            Membership <span className="text-acid">NFT</span>
+          </h2>
+          <span className="rounded-full border border-acid/45 bg-acid/[0.07] px-3 py-[6px] font-mono text-[10.5px] uppercase tracking-[0.2em] text-acid">
+            Coming soon
+          </span>
+          <span className="rounded-full border border-cream/15 px-3 py-[6px] font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted">
+            7,777 passes
+          </span>
+        </div>
+
+        <div className="mt-8 grid gap-10 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+          <div>
+            <img
+              src="/house-pass.jpg"
+              alt="HoodPoker House Pass membership NFT — a lime poker chip on black"
+              width={720}
+              height={720}
+              loading="lazy"
+              className="w-full rounded-[3%] border border-acid/20 shadow-[0_18px_60px_rgba(0,0,0,0.6)]"
+            />
+            <PassChecker />
+          </div>
+
+          <div>
+            <p className="max-w-[560px] text-[16.5px] leading-[1.6] text-muted">
+              7,777 passes, no more. The House Pass is a membership, not a stake: it buys more
+              table time and more ways to play with your people — never better cards. Chips stay
+              virtual, untradeable and worth nothing, exactly as they are today.
+            </p>
+
+            <ul className="mt-6 grid gap-3">
+              {PASS_PERKS.map((perk) => (
+                <li key={perk.title} className="flex gap-3">
+                  <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-acid" />
+                  <p className="text-[15px] leading-[1.55] text-cream">
+                    {perk.title}
+                    <span className="text-muted"> — {perk.body}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-7 rounded-card border border-cream/10 bg-night-900 p-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
+                Still a for-fun game
+              </p>
+              <p className="mt-2 text-[14.5px] leading-[1.6] text-muted">
+                No chips for sale, no chip transfers between players, no cash-out and no prize
+                of value — with or without a pass. Cosmetics never touch a hand, and the
+                leaderboard ranks profit per hand so a bigger daily allowance can’t buy rank.
+              </p>
+            </div>
+
+            <p className="mt-5 text-[13.5px] leading-[1.6] text-faint">
+              No mint date, no price and no mint page yet — this is the perk list we’re
+              building toward. Follow{' '}
+              <a
+                href="https://x.com/hoodpokercasino"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-acid underline underline-offset-4"
+              >
+                @hoodpokercasino
+              </a>{' '}
+              for the announcement.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ============================= FAQ ============================= */}
       <section id="faq" className="mx-auto max-w-faq px-[22px] pb-[88px] pt-[88px]">
-        <Eyebrow>05 — Straight answers</Eyebrow>
+        <Eyebrow>06 — Straight answers</Eyebrow>
         <h2 className="hp-display hp-h2 mt-3 text-cream">FAQ</h2>
         <Faq />
       </section>

@@ -415,17 +415,7 @@ export function TableScreen({
   if (layer) {
     return (
       <div className="fixed inset-0 z-[60] overflow-hidden bg-night-950">
-        {/* Backdrop: the felt itself, blown up and blurred, so the bands a
-            3:2 table leaves on a wide screen read as the room round it
-            rather than dead black. Same image as the felt — nothing extra
-            to load. */}
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div
-            className="absolute -inset-16 scale-110 bg-cover bg-center opacity-50 blur-3xl saturate-150"
-            style={{ backgroundImage: "url('/table-live.jpg')" }}
-          />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(10,12,10,0.2)_0%,rgba(10,12,10,0.85)_75%)]" />
-        </div>
+        <TableBackdrop inLayer />
         <div
           style={rotated ? rotatedStyle(rotated) : undefined}
           className={cn(
@@ -460,6 +450,7 @@ export function TableScreen({
        felt takes the space left between the bar and the dock, and chat
        scrolls inside its own column instead of growing the page. */
     <div className="mx-auto flex max-w-[1500px] flex-col px-3 pb-6 pt-4 sm:px-6 sm:pt-5 lg:h-[calc(100dvh-var(--hp-header,73px))] lg:overflow-hidden">
+      <TableBackdrop />
       {headerBar}
       <div className={cn('min-h-0 flex-1', docked && 'grid grid-cols-[minmax(0,1fr)_296px] gap-3')}>
         <div className="flex min-h-0 min-w-0 flex-col gap-2.5">
@@ -475,6 +466,33 @@ export function TableScreen({
       {!docked && (
         <TableDrawer open={drawerOpen} onClose={closeDrawer}>{panel(closeDrawer)}</TableDrawer>
       )}
+    </div>
+  );
+}
+
+/**
+ * The room behind the felt: a night skyline at low opacity under a dark
+ * vignette, so the space a 3:2 table leaves reads as a room rather than dead
+ * black. Kept faint on purpose — the cards have to stay the brightest thing
+ * on screen. `fixed` so it doesn't scroll with the page in the in-page view.
+ */
+function TableBackdrop({ inLayer = false }: { inLayer?: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        'pointer-events-none overflow-hidden',
+        // In the full-screen layer the parent paints its own background, so
+        // the backdrop sits above it (the content is `relative`). In the page
+        // it sits behind the flow instead.
+        inLayer ? 'absolute inset-0' : 'fixed inset-0 -z-10',
+      )}
+    >
+      <div
+        className="absolute inset-0 bg-cover bg-center opacity-[0.24]"
+        style={{ backgroundImage: "url('/vegas-night.jpg')" }}
+      />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,5,5,0.45)_0%,rgba(5,5,5,0.9)_78%)]" />
     </div>
   );
 }
