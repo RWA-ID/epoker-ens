@@ -8,3 +8,6 @@ out/
 .env*.local
 *.tsbuildinfo
 .DS_Store
+
+# House Pass snapshot output (worker/scripts/house-pass-snapshot.mjs)
+snapshot-out/
