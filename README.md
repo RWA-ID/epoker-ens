@@ -4,8 +4,9 @@
 `hoodfi.eth` name is your handle at the table, hands only start with **4+
 players**, and the chips are free and stay free.
 
-Built by [@ensgianteth](https://x.com/ensgianteth) · Live backend:
-`https://epoker-worker.dmpay.workers.dev` · Frontend: IPFS → `epoker.eth`
+Built by [@ensgianteth](https://x.com/ensgianteth) · Play at
+**[hoodpoker.fun](https://hoodpoker.fun)** (Cloudflare) or `epoker.eth.limo`
+(IPFS) · Backend: `https://worker.hoodpoker.fun`
 
 > **Disclaimer** — Hoodpoker is an independent community project. It is **not
 > affiliated with, endorsed by, or connected to Robinhood Markets, Robinhood
@@ -27,9 +28,9 @@ Built by [@ensgianteth](https://x.com/ensgianteth) · Live backend:
   `avatar` record becomes your table picture; mainnet ENS names work too, so
   nobody has to mint anything to sit down.
 - **Lobby & tables** — create/join tables (blinds 5/10 to 50/100, 100 BB
-  starting stack), shareable invite links, max 9 seats, **hard 4-player
+  starting stack), shareable invite links, max 8 seats, **hard 4-player
   minimum** to start a hand on public tables.
-- **Private tables** — pick the table size (2–9 seats) and whitelist guests by
+- **Private tables** — pick the table size (2–8 seats) and whitelist guests by
   name or address. Private tables never appear in the lobby (invite by link),
   only whitelisted wallets can sit, and hands start as soon as the (smaller)
   table fills — down to heads-up.
@@ -45,6 +46,8 @@ Built by [@ensgianteth](https://x.com/ensgianteth) · Live backend:
 - **Persistence** — D1 stores bankrolls (10,000 starting chips), the global
   leaderboard (net chips, hands won, biggest pot) and a daily +5,000 chip
   claim.
+- **House Pass whitelist** — 1,111 free-mint spots for the House Pass NFT,
+  one per wallet, with a live counter. See [House Pass NFT](#house-pass-nft).
 
 ## Architecture
 
@@ -54,9 +57,12 @@ epoker-eth/
 │   ├── app/                   / (lobby) · /table/?id= · /leaderboard · /profile
 │   ├── components/            felt, seats, cards, action bar, chat, avatars
 │   ├── lib/                   Reown AppKit + wagmi/viem, identity, WS client, sounds, auth
+│   ├── public/_headers        security headers for the Cloudflare deploy (IPFS ignores it)
+│   ├── wrangler.toml          Cloudflare static-assets deploy → hoodpoker.fun + www
 │   └── pin.mjs                pins out/ to IPFS via Pinata
 └── worker/                    Cloudflare Worker + Durable Objects + D1
-    ├── src/index.ts           router: /tables /leaderboard /profile /claim + WS forwarding
+    ├── src/index.ts           router: /tables /leaderboard /profile /claim /whitelist + WS forwarding
+    ├── src/whitelist.ts       House Pass whitelist: 1,111 spots, one per wallet, no CCFF00 holders
     ├── src/table.ts           TableDO — ONE Durable Object per table, all game logic
     ├── src/session.ts         SIWE nonces + verification, HMAC session tokens
     ├── src/auth.ts            legacy static-signature check (OFF: ALLOW_LEGACY_SIG=0)
@@ -147,6 +153,9 @@ npx wrangler d1 create epoker        # once — paste database_id into wrangler.
 npm run db:local                     # schema for local dev
 npm run dev                          # http://localhost:8787
 npm test                             # chat sanitizer tests
+npm run test:session                 # SIWE + session tokens (15 checks)
+npm run test:table                   # TableDO hand simulation (22 checks)
+npm run test:whitelist               # whitelist cap / no-repeat on real SQLite (17 checks)
 
 # frontend (second terminal)
 cd frontend
@@ -160,7 +169,7 @@ npm run dev                          # http://localhost:3000
 | `NEXT_PUBLIC_REOWN_PROJECT_ID` | Reown Cloud project ID (wallet modal) |
 | `NEXT_PUBLIC_ALCHEMY_KEY` | Alchemy mainnet key — mainnet ENS name lookups |
 | `NEXT_PUBLIC_ROBINHOOD_RPC` | Optional override for the chain-4663 RPC |
-| `NEXT_PUBLIC_WORKER_URL` | Worker origin (`http://localhost:8787` in dev) |
+| `NEXT_PUBLIC_WORKER_URL` | Worker origin — `https://worker.hoodpoker.fun` in production, `http://localhost:8787` in dev. The build's CSP is derived from it |
 | `PINATA_JWT` | Only for `node pin.mjs` (IPFS deploy) — never bundled |
 
 To test multiplayer, open four browser profiles with four wallets and join the
@@ -180,6 +189,34 @@ version.
 `next.config.mjs` also carries two related workarounds: `externals.push
 ('pino-pretty')` and `resolve.alias.accounts = false`.
 
+## Hosting
+
+The same static build is served from two places:
+
+| Where | How | Release step |
+| --- | --- | --- |
+| **hoodpoker.fun** + www | Cloudflare Workers static assets, worker `hoodpoker-site` (`frontend/wrangler.toml`) | `npx wrangler deploy` — live at once |
+| **epoker.eth** | IPFS via Pinata | `node pin.mjs`, then set the contenthash by hand |
+
+The game backend (`worker/`) answers on **`worker.hoodpoker.fun`** and on its
+original `epoker-worker.dmpay.workers.dev`. The workers.dev URL must stay on
+(`workers_dev = true`): every epoker.eth pin built before the move calls it.
+A domain move adds a hostname; it never retires one.
+
+On eth.limo the gateway sends the framing and security headers. On Cloudflare
+nobody does unless we do, so `frontend/public/_headers` sets them
+(`frame-ancestors 'self'`, `X-Frame-Options`, HSTS, `nosniff`,
+`Referrer-Policy`) plus immutable caching for hashed `/_next/static` chunks.
+
+In `frontend/wrangler.toml`, **`routes` must sit above `[assets]`**. Below it,
+TOML reads it as `assets.routes`, wrangler only warns "Unexpected fields", and
+the custom domains are silently not attached.
+
+A new frontend origin has to be added in three places, or sign-in breaks on
+it: `ALLOWED_ORIGINS` in `worker/wrangler.toml`, Privy's Allowed domains, and
+Reown's domain allowlist (domains only, never a path). The CSP needs nothing,
+since it allows `'self'`.
+
 ## Deployment
 
 **Order matters.** The worker reads `handle`/`avatar`, which the live D1
@@ -195,14 +232,15 @@ npx wrangler d1 execute epoker --file=migrations/001_handle_avatar.sql --remote
 # 2. deploy the worker
 npx wrangler deploy
 
-# 3. build + pin the frontend
+# 3. build the frontend once, ship it to both homes
 cd ../frontend
-npm run build          # static export → out/
-node pin.mjs           # pins out/ to Pinata, prints the CID
+npm run build          # static export → out/ (~12–15 min on a slow machine)
+npx wrangler deploy    # → hoodpoker.fun, live immediately
+node pin.mjs           # pins out/ to Pinata, prints the CID for epoker.eth
 ```
 
-Alternatives to IPFS: `npx wrangler pages deploy out` (CF Pages) or import
-`frontend/` into Vercel — the static export needs no server runtime.
+Migrations so far, each run once with `--remote` before the worker that needs
+it: `001_handle_avatar.sql`, `002_auth_nonces.sql`, `003_whitelist.sql`.
 
 ### Pointing epoker.eth at the app
 
@@ -256,7 +294,8 @@ avatar is read from that verified name's record, never taken from the client.
 
 **Abuse limits.**
 - Cloudflare rate limiters: sign-in 20/min per IP, table creation 5/min per
-  address, socket upgrades 40/min per IP.
+  address (the whitelist shares that limiter, keyed separately), socket
+  upgrades 40/min per IP.
 - Per socket: frames over 1 KB refused; chat 5 lines / 10 s; more than 40
   messages / 5 s closes the socket. 150 sockets per table.
 - Chat is plain text with links stripped server-side.
@@ -293,6 +332,59 @@ Flipping the flag before the new pin is really being served locks out every
 browser still on the old one. Tokens already issued are unaffected either way —
 they are HMAC-verified and never touch the legacy path — so only new sign-ins
 are at risk during the window.
+
+## House Pass NFT
+
+A membership NFT: 7,777 passes, **every stage free** (gas only). **Mint date
+TBA.** No contract is deployed yet. This repo holds the sign-up side and the
+landing-page section (`/#pass`, linked as "House Pass NFT" in the nav).
+
+| Stage | Who | Cap |
+| --- | --- | --- |
+| 1. CCFF00 | One per holder, however many CCFF00 they hold (~4,296 holders). First come | 3,333 |
+| 2. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C` | 1,111 |
+| 3. Whitelist | One per wallet, via the sign-up on the site. CCFF00 holders excluded | 1,111 |
+| 4. Public | One per wallet | 2,222 |
+
+CCFF00 is `0x505A22Ffed8d37ebE580FfD98d2Cdb0021189146` on Robinhood Chain.
+The perks on the landing page are **copy, not behaviour** yet: the worker still
+grants every player the same daily chips and reads nothing about passes.
+
+### Whitelist
+
+| Route | Auth | Returns |
+| --- | --- | --- |
+| `GET /whitelist?address=0x…` | none | `{ count, cap, open, joined? }` — the live counter |
+| `POST /whitelist` | SIWE session | `{ ok: true, already }`, or `{ ok: false, reason }` |
+
+Refusals are answers the page shows, not errors: `closed` (403), `full` (409),
+`ccff00` (403, they mint in stage 1), `unavailable` (503, the chain didn't
+answer; try again).
+
+- **One per wallet** is the D1 primary key on `whitelist.address`, and the
+  address comes from the session token, never from the request body.
+- **The cap can't be overshot.** The insert is a single statement,
+  `INSERT … SELECT … WHERE (SELECT COUNT(*) …) < 1111 ON CONFLICT DO NOTHING`,
+  so two wallets racing for the last spot can't both land. A count followed by
+  a separate insert could. The test suite races exactly that, against real
+  SQLite (`node:sqlite`). With the in-statement cap removed, it lets the list
+  reach 1,112.
+- **CCFF00 holders are checked at sign-up** with a `balanceOf` that has three
+  outcomes. A throttled RPC is `unavailable`, never "holds none", so a holder
+  can't slip in on a bad second.
+- **Closing sign-ups:** set `WHITELIST_OPEN = "0"` in `worker/wrangler.toml`
+  and deploy. The counter stays readable, and anyone already on the list still
+  sees "you're in".
+
+**This table is the sign-up record, not the allowlist.** A wallet can buy a
+CCFF00 after joining, so the snapshot that builds the mint allowlists must
+filter CCFF00 holders out of it again.
+
+```bash
+# read the list
+npx wrangler d1 execute epoker --remote --command \
+  "SELECT address, created_at FROM whitelist ORDER BY created_at"
+```
 
 ## Known limitations
 
