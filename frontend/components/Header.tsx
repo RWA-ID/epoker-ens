@@ -24,6 +24,7 @@ const NAV = [
   { href: '/#lobby', label: 'Lobby' },
   { href: '/#how', label: 'How it works' },
   { href: '/#ranks', label: 'Ranks' },
+  { href: '/#pass', label: 'House Pass NFT', accent: true },
   { href: '/#faq', label: 'FAQ' },
 ];
 
@@ -110,7 +111,10 @@ export function Header() {
             <Link
               key={item.href}
               href={item.href}
-              className="font-mono text-[11.5px] uppercase tracking-[0.16em] text-dim transition-colors hover:text-acid"
+              className={cn(
+                'font-mono text-[11.5px] uppercase tracking-[0.16em] transition-colors hover:text-acid',
+                'accent' in item ? 'text-acid/80' : 'text-dim',
+              )}
             >
               {item.label}
             </Link>
