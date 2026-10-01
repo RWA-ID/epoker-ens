@@ -9,6 +9,13 @@ name = "epoker-worker"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
+# worker.hoodpoker.fun is an ADDED hostname. epoker-worker.dmpay.workers.dev
+# stays on: every epoker.eth pin calls it, so never set workers_dev = false.
+workers_dev = true
+routes = [
+  { pattern = "worker.hoodpoker.fun", custom_domain = true },
+]
+
 # Each poker table is one Durable Object instance — Cloudflare scales
 # horizontally by placing each table near its players; a single table's
 # state is strongly consistent because the DO is single-threaded.
@@ -30,7 +37,9 @@ database_id = "0acc384c-4925-4b2c-abcd-727c9201f40e"
 # Never add it here: a [vars] entry shadows the secret of the same name.
 [vars]
 # Frontends allowed by CORS, the SIWE domain check and socket upgrades.
-ALLOWED_ORIGINS = "https://epoker.eth.limo,https://epoker.eth.link,https://hoodpoker.eth.limo,https://hoodpoker.eth.link,http://localhost:3000"
+# hoodpoker.fun + www = the Cloudflare-hosted copy (../frontend/wrangler.toml);
+# hoodpoker-site.dmpay.workers.dev is that same deploy before the domain lands.
+ALLOWED_ORIGINS = "https://epoker.eth.limo,https://epoker.eth.link,https://hoodpoker.eth.limo,https://hoodpoker.eth.link,https://hoodpoker.fun,https://www.hoodpoker.fun,https://hoodpoker-site.dmpay.workers.dev,http://localhost:3000"
 # Transitional: accept the old static signature from the frontend pinned
 # before SIWE. Closed 2026-09-17 once epoker.eth pointed at the SIWE pin
 # QmRPMCFViRwMtpgjjK6jdGoSSAp2HM8AM8hTC4d1kM3D73 — SIWE is now the only way in.

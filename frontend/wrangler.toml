@@ -1,0 +1,22 @@
+# HoodPoker site — the static export in out/, served by Cloudflare Workers
+# static assets at hoodpoker.fun. The IPFS pin behind epoker.eth stays live;
+# this is a second home for the same build, not a replacement.
+#
+# Deploy:  npm run build && npx wrangler deploy
+# The game backend is a separate worker (../worker); this one serves files only.
+
+name = "hoodpoker-site"
+compatibility_date = "2026-06-01"
+
+# Kept here, not only in the dashboard, so a deploy can't drop them.
+# Must sit above [assets] — anything below a table header belongs to it.
+routes = [
+  { pattern = "hoodpoker.fun", custom_domain = true },
+  { pattern = "www.hoodpoker.fun", custom_domain = true },
+]
+
+[assets]
+directory = "./out"
+# out/ is a trailingSlash export (table/index.html), same as on IPFS.
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
