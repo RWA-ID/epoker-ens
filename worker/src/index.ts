@@ -13,6 +13,8 @@
  *   GET  /leaderboard            top players by net play chips
  *   GET  /profile/:address       one player's stats + bankroll
  *   POST /claim                  daily free chips (auth)
+ *   GET  /whitelist?address=     House Pass sign-ups: { count, cap, open, joined? }
+ *   POST /whitelist              take a spot (auth) — one per wallet, no CCFF00 holders
  *   GET  /auth/nonce             one-time SIWE nonce
  *   POST /auth/verify            { message, signature } → { token, expiresAt }
  *
@@ -25,6 +27,7 @@ import type { Env, RateLimiter } from './env';
 import { verifyAuth } from './auth';
 import { issueNonce, issueToken, isAllowedOrigin, verifySiwe, verifyToken } from './session';
 import { MAX_PLAYERS, PRACTICE_TABLE_ID, WhitelistEntry } from './poker/types';
+import { joinWhitelist, whitelistStatus } from './whitelist';
 
 export { TableDO } from './table';
 
@@ -266,6 +269,25 @@ export default {
 
         if (!res.meta.changes) return json({ error: 'already claimed in the last 24h' }, 429);
         return json({ claimed: DAILY_CHIPS });
+      }
+
+      /* ---------------- House Pass whitelist ---------------- */
+
+      if (path === '/whitelist' && request.method === 'GET') {
+        const raw = (url.searchParams.get('address') ?? '').toLowerCase();
+        const address = /^0x[0-9a-f]{40}$/.test(raw) ? raw : undefined;
+        return json(await whitelistStatus(env, address));
+      }
+
+      if (path === '/whitelist' && request.method === 'POST') {
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+        if (!(await underLimit(env.CREATE_LIMITER, `wl:${address}`))) return json({ error: 'slow down' }, 429);
+
+        const result = await joinWhitelist(env, address);
+        if (result.ok) return json(result);
+        const status = { closed: 403, full: 409, ccff00: 403, unavailable: 503 }[result.reason];
+        return json(result, status);
       }
 
       return json({ error: 'not found' }, 404);

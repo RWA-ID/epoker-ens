@@ -27,6 +27,7 @@ import { Ticker } from '@/components/Ticker';
 import { Faq } from '@/components/Faq';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
 import { PassChecker } from '@/components/PassChecker';
+import { WhitelistSignup } from '@/components/WhitelistSignup';
 
 const CHAIN_NAME = 'Robinhood Chain';
 
@@ -74,6 +75,17 @@ const PASS_PERKS = [
   { title: 'Member cosmetics', body: 'a badge on your seat, alternate card backs and felt tints. Never an edge in a hand.' },
   { title: 'Your numbers', body: 'full hand history export, per-opponent stats and season flair on the board.' },
   { title: 'First through the door', body: 'new modes — sit-and-go, Omaha — open to passes before anyone else.' },
+];
+
+/**
+ * Mint stages — all free, 7,777 total. Caps are Hector's 2026-10-01 numbers;
+ * the whitelist cap is enforced live by worker/src/whitelist.ts.
+ */
+const MINT_STAGES = [
+  { name: 'CCFF00 holders', cap: '3,333', who: 'one per holder, however many you hold — first come' },
+  { name: 'HoodFi name owners', cap: '1,111', who: 'one per owner of a hoodfi.eth name at the snapshot' },
+  { name: 'Whitelist', cap: '1,111', who: 'one per wallet — sign up below' },
+  { name: 'Public', cap: '2,222', who: 'one per wallet, open to anyone' },
 ];
 
 const HERO_STATS = [
@@ -697,6 +709,7 @@ export default function HomePage() {
               className="w-full rounded-[3%] border border-acid/20 shadow-[0_18px_60px_rgba(0,0,0,0.6)]"
             />
             <PassChecker />
+            <WhitelistSignup />
           </div>
 
           <div>
@@ -718,6 +731,27 @@ export default function HomePage() {
               ))}
             </ul>
 
+            <div className="mt-7">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
+                Four stages · all free · date TBA
+              </p>
+              <ol className="mt-3 grid gap-2">
+                {MINT_STAGES.map((stage, i) => (
+                  <li
+                    key={stage.name}
+                    className="flex items-baseline gap-3 rounded-card border border-cream/10 px-4 py-3"
+                  >
+                    <span className="font-mono text-[11px] text-faint">0{i + 1}</span>
+                    <p className="min-w-0 flex-1 text-[14.5px] leading-[1.5] text-cream">
+                      {stage.name}
+                      <span className="text-muted"> — {stage.who}</span>
+                    </p>
+                    <span className="shrink-0 font-mono text-[12px] tabular-nums text-acid">{stage.cap}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
             <div className="mt-7 rounded-card border border-cream/10 bg-night-900 p-5">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
                 Still a for-fun game
@@ -730,8 +764,8 @@ export default function HomePage() {
             </div>
 
             <p className="mt-5 text-[13.5px] leading-[1.6] text-faint">
-              No mint date, no price and no mint page yet — this is the perk list we’re
-              building toward. Follow{' '}
+              Every stage is free — you pay only gas. The mint date is TBA and there&rsquo;s
+              no mint page yet. Follow{' '}
               <a
                 href="https://x.com/hoodpokercasino"
                 target="_blank"

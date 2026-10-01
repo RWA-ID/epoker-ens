@@ -19,6 +19,8 @@ export interface Env {
    * points at a SIWE build.
    */
   ALLOW_LEGACY_SIG?: string;
+  /** "1" = whitelist sign-ups accepted. Anything else closes them (the count stays readable). */
+  WHITELIST_OPEN?: string;
   /** Mainnet RPC for verifying ENS handles and avatars. */
   MAINNET_RPC?: string;
   /** Optional rate limiters — absent in tests and `wrangler dev` is fine. */

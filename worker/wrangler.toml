@@ -45,6 +45,8 @@ ALLOWED_ORIGINS = "https://epoker.eth.limo,https://epoker.eth.link,https://hoodp
 # QmRPMCFViRwMtpgjjK6jdGoSSAp2HM8AM8hTC4d1kM3D73 — SIWE is now the only way in.
 ALLOW_LEGACY_SIG = "0"
 MAINNET_RPC = "https://ethereum-rpc.publicnode.com"
+# House Pass whitelist sign-ups: "1" = open. Set "0" and redeploy to close at the snapshot.
+WHITELIST_OPEN = "1"
 
 # Rate limits (per key, per period in seconds — Cloudflare allows 10 or 60).
 # namespace_id is any account-unique integer.

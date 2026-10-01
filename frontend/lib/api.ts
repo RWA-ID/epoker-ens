@@ -42,7 +42,42 @@ async function post<T>(path: string, auth: ApiAuth, body?: unknown): Promise<T> 
   return data;
 }
 
+/** House Pass whitelist — mirrors worker/src/whitelist.ts. */
+export interface WhitelistStatus {
+  count: number;
+  cap: number;
+  open: boolean;
+  joined?: boolean;
+}
+
+export type WhitelistJoin =
+  | { ok: true; already: boolean; count: number; cap: number }
+  | { ok: false; reason: 'closed' | 'full' | 'ccff00' | 'unavailable'; count: number; cap: number };
+
+/**
+ * A refusal (full, closed, CCFF00 holder, chain unreachable) is an answer the
+ * page shows, not an error, so only auth and transport failures throw.
+ */
+async function joinWhitelist(auth: ApiAuth): Promise<WhitelistJoin> {
+  const res = await fetch(`${WORKER_URL}/whitelist`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${auth.token}` },
+  });
+  if (res.status === 401) {
+    clearSession(auth.address);
+    throw new Error('Session expired — please try again.');
+  }
+  const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  if (typeof data?.ok !== 'boolean') {
+    throw new Error(typeof data?.error === 'string' ? data.error : `Whitelist failed: ${res.status}`);
+  }
+  return data as unknown as WhitelistJoin;
+}
+
 export const api = {
+  whitelist: (address?: string) =>
+    get<WhitelistStatus>(`/whitelist${address ? `?address=${address.toLowerCase()}` : ''}`),
+  joinWhitelist,
   listTables: () => get<{ tables: LobbyTable[] }>('/tables'),
   createTable: (auth: ApiAuth, options: CreateTableOptions) =>
     post<{ id: string }>('/tables', auth, options),

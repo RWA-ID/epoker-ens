@@ -5,8 +5,9 @@
  * One `balanceOf` against the CCFF00 collection on Robinhood Chain — the same
  * chain (and the same RPC already in the CSP) the HoodFi name lookups use.
  * Read-only: it proves nothing on its own and reserves nothing. The real
- * allowlist is drawn at the snapshot, whenever the mint is scheduled, so the
- * copy says "as of right now" rather than promising a number.
+ * allowlist is drawn at the snapshot — one pass per holder whatever the
+ * balance, 3,333 spots for 4,296 holders, first come — so the copy promises
+ * a spot in the stage, never a count of passes.
  *
  * That RPC refuses a share of calls (it is what demoted players to a bare
  * address at the table), so a failure says "couldn't reach the chain" and
@@ -75,7 +76,7 @@ export function PassChecker() {
         />
         <p className="text-[14px] leading-[1.5] text-cream">
           <span className="font-semibold text-acid">CCFF00 holders mint free.</span>{' '}
-          <span className="text-muted">One pass per CCFF00 held.</span>
+          <span className="text-muted">One pass per holder, however many you hold.</span>
         </p>
       </div>
 
@@ -104,13 +105,13 @@ export function PassChecker() {
               </span>
               {' — '}
               <span className="text-muted">
-                that&rsquo;s {result.count} free {result.count === 1 ? 'pass' : 'passes'} at the
-                snapshot, as things stand today.
+                that&rsquo;s one free pass in the CCFF00 stage (3,333 spots, first come), if
+                it still holds at the snapshot.
               </span>
             </>
           )}
           {result.kind === 'none' && (
-            <>No CCFF00 found in this wallet. Holding one before the snapshot earns a free pass.</>
+            <>No CCFF00 in this wallet. Join the whitelist below, or own a HoodFi name for the HoodFi stage.</>
           )}
           {result.kind === 'error' && (
             <>Couldn&rsquo;t reach Robinhood Chain just now — that RPC drops calls. Try again.</>

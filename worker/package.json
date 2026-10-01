@@ -10,7 +10,8 @@
     "db:remote": "wrangler d1 execute epoker --file=schema.sql --remote",
     "test": "node --experimental-strip-types test/chat.test.mts",
     "test:table": "esbuild test/table.test.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/table.test.mjs && node node_modules/.cache/table.test.mjs",
-    "test:session": "esbuild test/session.test.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/session.test.mjs && node node_modules/.cache/session.test.mjs"
+    "test:session": "esbuild test/session.test.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/session.test.mjs && node node_modules/.cache/session.test.mjs",
+    "test:whitelist": "esbuild test/whitelist.test.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/whitelist.test.mjs && node --no-warnings node_modules/.cache/whitelist.test.mjs"
   },
   "dependencies": {
     "viem": "^2.21.0"

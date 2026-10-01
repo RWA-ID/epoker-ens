@@ -42,3 +42,9 @@ CREATE TABLE IF NOT EXISTS auth_nonces (
 );
 
 CREATE INDEX IF NOT EXISTS idx_auth_nonces_expiry ON auth_nonces (expires_at);
+
+-- House Pass whitelist sign-ups (src/whitelist.ts). Live DB: migrations/003.
+CREATE TABLE IF NOT EXISTS whitelist (
+  address     TEXT PRIMARY KEY,
+  created_at  INTEGER NOT NULL
+);
