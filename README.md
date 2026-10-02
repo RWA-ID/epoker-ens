@@ -341,12 +341,21 @@ ERC721 on Robinhood Chain, deployed through OpenSea Studio, 7.77% creator
 earnings, enforced. This repo holds the sign-up side, the snapshot script and
 the landing-page section (`/#pass`, linked as "House Pass NFT" in the nav).
 
+**Snapshot: October 13, 2026.** CCFF00 holdings and HoodFi name ownership
+are read then, and whitelist sign-ups close (`WHITELIST_OPEN = "0"`). The
+allowlist CSVs get uploaded to OpenSea on October 14.
+
 | Stage | Who | Cap |
 | --- | --- | --- |
+| 0. Team | One wallet (the founder's), up to 100, minted first for giveaways after the mint. Its allowlist is that single address | 100 |
 | 1. CCFF00 | One per holder, however many they hold. ~4,316 holders, so the **3,333 longest holders** at the snapshot | 3,333 |
 | 2. Whitelist | One per wallet, via the sign-up on the site. CCFF00 holders may join; those picked for stage 1 are dropped at the snapshot and the waitlist backfills | 2,222 |
 | 3. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C`. Last way in before public, including for CCFF00 holders who missed the cut | 1,111 |
 | 4. Public | One per wallet | 1,111 |
+
+The team's 100 come out of the 7,777, so the public stage gets whatever is
+left after stages 0–3. Allowlist stages rarely fill completely; in the
+2026-10-01 dry run HoodFi names had 80 owners against 1,111 places.
 
 **OpenSea Studio has no per-stage supply cap**, only a per-wallet limit, and
 those limits add up across stages. A stage's cap is therefore the length of
