@@ -6,7 +6,7 @@ import { LegalPage, Clause, List, Callout } from '@/components/Legal';
 export const metadata: Metadata = pageMetadata({
   title: 'Disclaimer — HoodPoker',
   description:
-    'HoodPoker is a free play-chip game. No wagering, no payouts, no token, and no affiliation with Robinhood Markets, Inc.',
+    'HoodPoker is a free play-chip game. No wagering, no payouts, no token, an optional membership NFT, and no affiliation with Robinhood Markets, Inc.',
   path: '/disclaimer/',
 });
 
@@ -19,16 +19,17 @@ export default function DisclaimerPage() {
       intro={
         <>
           HoodPoker is a free game played with virtual chips. It is not a casino, not a
-          sportsbook, and not an investment. Nothing here can be bought, cashed out or
-          redeemed for anything of value.
+          sportsbook, and not an investment. Chips can&rsquo;t be bought on their own, cashed out
+          or redeemed for anything of value. The one thing for sale is the optional House Pass
+          membership NFT, and you never need it to play.
         </>
       }
     >
       <Clause n={1} title="No gambling, no wagering, no payouts">
         <p>
           Playing HoodPoker costs nothing and pays nothing. There is no buy-in, no deposit,
-          no rake, no prize pool and no cash-out. Chips are issued free, claimed free, and
-          exist only as a number in our database.
+          no rake, no prize pool and no cash-out. Chips are issued free, claimed free or
+          credited with a House Pass, and exist only as a number in our database.
         </p>
         <Callout>
           Because no money or anything of value is ever staked and no prize of value can
@@ -42,23 +43,37 @@ export default function DisclaimerPage() {
         <List
           items={[
             'Chips have no monetary value and no exchange rate to any currency, token or asset.',
-            'Chips cannot be bought, sold, traded, gifted, withdrawn or redeemed.',
+            'Chips are never sold on their own, and cannot be sold, traded, gifted, withdrawn or redeemed. A House Pass comes with a one-time chip stack; once credited, those chips are the same play money as any other.',
             'Chips are not stored on any blockchain. They are rows in our database, not tokens in your wallet.',
             'Balances, the daily claim amount and the leaderboard may be adjusted, reset or wiped at any time — including at the end of a season or after an exploit.',
           ]}
         />
       </Clause>
 
-      <Clause n={3} title="There is no HoodPoker token">
+      <Clause n={3} title="No token. One membership NFT.">
         <p>
-          There is no token, no coin, no NFT, no presale, no allocation, no airdrop and no
-          holding requirement. We have never sold one and we are not planning one. Your
-          leaderboard position confers no claim on anything.
+          There is no HoodPoker token, coin, presale, allocation or airdrop, and we are not
+          planning one. Your leaderboard position confers no claim on anything.
+        </p>
+        <p>
+          The one thing we issue is the{' '}
+          <Link href="/pass/" className="text-acid underline underline-offset-4">
+            House Pass
+          </Link>
+          , an optional membership NFT on Robinhood Chain sold through our OpenSea drop: free in
+          the allowlist stages, priced in the public stage to fund development, infrastructure
+          and maintenance. It unlocks perks inside the game. It is not an investment: it pays
+          no revenue, carries no ownership or vote, and may be worth nothing on resale. The{' '}
+          <Link href="/terms/" className="text-acid underline underline-offset-4">
+            Terms
+          </Link>{' '}
+          (clause 7) set out exactly what a pass does and doesn&rsquo;t give you.
         </p>
         <Callout>
-          If you see a HoodPoker token, presale, giveaway or &ldquo;claim&rdquo; page anywhere, it is
-          a scam and it is not us. Never sign a transaction or approval to claim HoodPoker
-          chips — the game never asks for one.
+          The only official mint is the OpenSea drop linked from this site and @hoodpokercasino.
+          Any HoodPoker token, presale, giveaway or &ldquo;claim&rdquo; page anywhere else is a scam and
+          it is not us. The game itself never asks you to sign a transaction or approval —
+          minting a pass is a transaction you start yourself, on OpenSea.
         </Callout>
       </Clause>
 
@@ -75,8 +90,9 @@ export default function DisclaimerPage() {
       <Clause n={5} title="Not financial advice">
         <p>
           Nothing on this site is financial, investment, legal or tax advice, an offer, or a
-          solicitation to buy or sell anything. Connecting a wallet to play a free card game
-          is not an investment decision, and we make no recommendation about any asset,
+          solicitation to buy or sell anything as an investment. Connecting a wallet to play a
+          free card game is not an investment decision, and neither is minting a House Pass:
+          get one for the membership or not at all. We make no recommendation about any asset,
           network or name service mentioned here.
         </p>
       </Clause>

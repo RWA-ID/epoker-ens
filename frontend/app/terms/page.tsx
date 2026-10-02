@@ -53,7 +53,9 @@ export default function TermsPage() {
         <p>
           A free multiplayer Texas Hold&rsquo;em game played with virtual chips. Public tables
           deal at four seated players; private tables are sized by their host between two and
-          eight seats. There is no buy-in and no payout of any kind — see the{' '}
+          eight seats. There is no buy-in and no payout of any kind, and you never need to buy
+          anything to play. The one thing we offer for sale is the optional House Pass (clause 7).
+          See the{' '}
           <Link href="/disclaimer/" className="text-acid underline underline-offset-4">
             Disclaimer
           </Link>{' '}
@@ -103,10 +105,39 @@ export default function TermsPage() {
           property, not a balance you hold, and not redeemable for anything. We may grant,
           adjust, reset or remove them at any time, for any reason, without notice or
           compensation — including clawing back chips gained through a bug or an exploit.
+          Chips credited by a House Pass are chips like any other and follow this clause.
         </p>
       </Clause>
 
-      <Clause n={7} title="Fair play">
+      <Clause n={7} title="The House Pass">
+        <p>
+          The House Pass is an optional membership NFT on Robinhood Chain, minted through our
+          drop on OpenSea and linked from this site and{' '}
+          <a
+            href="https://x.com/hoodpokercasino"
+            target="_blank"
+            rel="noreferrer"
+            className="text-acid underline underline-offset-4"
+          >
+            @hoodpokercasino
+          </a>
+          . The allowlist stages are free apart from network gas. The public stage costs the
+          price shown at the time of mint, which goes to development, infrastructure and
+          maintenance. The sale itself runs on OpenSea, under OpenSea&rsquo;s terms as well as
+          these.
+        </p>
+        <List
+          items={[
+            'A pass unlocks the perks described on the House Pass page while we run HoodPoker. We may change, replace or retire a perk, and every perk ends if HoodPoker shuts down.',
+            'The chip stack that comes with a pass is credited once per pass, ever, not once per owner. It is play money under clause 6, with no cash value.',
+            'A pass is not an investment. It carries no share of revenue or profit, no vote, no ownership of HoodPoker and no claim on anything. We make no promise about its resale value, and you should assume it may be worth nothing on resale.',
+            'Mints are final. Gas and mint prices are not refundable, including for a failed or reverted transaction.',
+            'Resales on secondary markets carry the creator earnings set on the collection, and happen between you and the buyer.',
+          ]}
+        />
+      </Clause>
+
+      <Clause n={8} title="Fair play">
         <p>Do not do any of the following:</p>
         <List
           items={[
@@ -126,7 +157,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={8} title="Chat">
+      <Clause n={9} title="Chat">
         <p>
           Chat is open to everyone connected to a table, seated or watching. Links are
           stripped automatically before a message reaches anyone, while .eth names are kept.
@@ -136,7 +167,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={9} title="Private tables">
+      <Clause n={10} title="Private tables">
         <p>
           A private table is controlled by whoever created it: they set the seat count and
           the guest list. Private tables never appear in the public lobby, but a table link
@@ -145,7 +176,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={10} title="Availability and changes">
+      <Clause n={11} title="Availability and changes">
         <p>
           We may change, suspend, break or shut down any part of HoodPoker at any time
           without notice, including tables in progress. We may also update these terms; the
@@ -154,7 +185,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={11} title="Code and content">
+      <Clause n={12} title="Code and content">
         <p>
           The HoodPoker source is published under the MIT licence at{' '}
           <a
@@ -171,7 +202,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={12} title="Third-party services">
+      <Clause n={13} title="Third-party services">
         <p>
           Playing involves services we do not operate: your wallet and its connection
           provider, public RPC endpoints, name services, and the IPFS gateway serving this
@@ -180,7 +211,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={13} title="No warranty">
+      <Clause n={14} title="No warranty">
         <p>
           HoodPoker is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo;, without warranties of any kind,
           express or implied, including merchantability, fitness for a particular purpose,
@@ -189,7 +220,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause n={14} title="Limitation of liability">
+      <Clause n={15} title="Limitation of liability">
         <p>
           To the fullest extent permitted by law, we are not liable for any indirect,
           incidental, special, consequential or punitive damages, or for any loss of chips,
@@ -197,12 +228,13 @@ export default function TermsPage() {
           HoodPoker. Nothing in these terms limits liability that cannot be limited by law.
         </p>
         <Callout>
-          Since HoodPoker is free and nothing of value changes hands, our total liability to
-          you for any claim is limited to the amount you have paid us, which is nothing.
+          Our total liability to you for any claim is limited to the amount you paid us in the
+          twelve months before the claim. For most players that is nothing; if you minted a
+          House Pass in the public stage, it is that mint price.
         </Callout>
       </Clause>
 
-      <Clause n={15} title="Contact">
+      <Clause n={16} title="Contact">
         <p>
           Reach us on X at{' '}
           <a
