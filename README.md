@@ -46,7 +46,7 @@ Built by [@ensgianteth](https://x.com/ensgianteth) · Play at
 - **Persistence** — D1 stores bankrolls (10,000 starting chips), the global
   leaderboard (net chips, hands won, biggest pot) and a daily +5,000 chip
   claim.
-- **House Pass whitelist** — 1,111 free-mint spots for the House Pass NFT,
+- **House Pass whitelist** — 2,222 free-mint spots (plus a waitlist) for the House Pass NFT,
   one per wallet, with a live counter. See [House Pass NFT](#house-pass-nft).
 
 ## Architecture
@@ -62,7 +62,7 @@ epoker-eth/
 │   └── pin.mjs                pins out/ to IPFS via Pinata
 └── worker/                    Cloudflare Worker + Durable Objects + D1
     ├── src/index.ts           router: /tables /leaderboard /profile /claim /whitelist + WS forwarding
-    ├── src/whitelist.ts       House Pass whitelist: 1,111 spots, one per wallet, no CCFF00 holders
+    ├── src/whitelist.ts       House Pass whitelist: 2,222 spots + 1,111 waitlist, one per wallet
     ├── src/table.ts           TableDO — ONE Durable Object per table, all game logic
     ├── src/session.ts         SIWE nonces + verification, HMAC session tokens
     ├── src/auth.ts            legacy static-signature check (OFF: ALLOW_LEGACY_SIG=0)
@@ -335,16 +335,23 @@ are at risk during the window.
 
 ## House Pass NFT
 
-A membership NFT: 7,777 passes, **every stage free** (gas only). **Mint date
-TBA.** No contract is deployed yet. This repo holds the sign-up side and the
-landing-page section (`/#pass`, linked as "House Pass NFT" in the nav).
+A membership NFT: 7,777 passes, **every stage free** (gas only), minting on
+**OpenSea from October 15, 2026**. Contract: "HoodPoker House Pass" (`HPASS`),
+ERC721 on Robinhood Chain, deployed through OpenSea Studio, 7.77% creator
+earnings, enforced. This repo holds the sign-up side, the snapshot script and
+the landing-page section (`/#pass`, linked as "House Pass NFT" in the nav).
 
 | Stage | Who | Cap |
 | --- | --- | --- |
-| 1. CCFF00 | One per holder, however many CCFF00 they hold (~4,296 holders). First come | 3,333 |
-| 2. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C` | 1,111 |
-| 3. Whitelist | One per wallet, via the sign-up on the site. CCFF00 holders excluded | 1,111 |
-| 4. Public | One per wallet | 2,222 |
+| 1. CCFF00 | One per holder, however many they hold. ~4,316 holders, so the **3,333 longest holders** at the snapshot | 3,333 |
+| 2. Whitelist | One per wallet, via the sign-up on the site. CCFF00 holders may join; those picked for stage 1 are dropped at the snapshot and the waitlist backfills | 2,222 |
+| 3. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C`. Last way in before public, including for CCFF00 holders who missed the cut | 1,111 |
+| 4. Public | One per wallet | 1,111 |
+
+**OpenSea Studio has no per-stage supply cap**, only a per-wallet limit, and
+those limits add up across stages. A stage's cap is therefore the length of
+its allowlist. Whatever a stage doesn't mint stays available to the stages
+after it.
 
 CCFF00 is `0x505A22Ffed8d37ebE580FfD98d2Cdb0021189146` on Robinhood Chain.
 The perks on the landing page are **copy, not behaviour** yet: the worker still
@@ -352,39 +359,67 @@ grants every player the same daily chips and reads nothing about passes.
 
 ### Whitelist
 
+2,222 spots plus a 1,111 waitlist: sign-ups stop at 3,333.
+
 | Route | Auth | Returns |
 | --- | --- | --- |
-| `GET /whitelist?address=0x…` | none | `{ count, cap, open, joined? }` — the live counter |
-| `POST /whitelist` | SIWE session | `{ ok: true, already }`, or `{ ok: false, reason }` |
+| `GET /whitelist?address=0x…` | none | `{ count, cap, waitlist, open, joined?, position? }`, the live counter |
+| `POST /whitelist` | SIWE session | `{ ok: true, already, position, holdsCcff00 }`, or `{ ok: false, reason }` |
 
-Refusals are answers the page shows, not errors: `closed` (403), `full` (409),
-`ccff00` (403, they mint in stage 1), `unavailable` (503, the chain didn't
-answer; try again).
+Refusals are answers the page shows, not errors: `closed` (403) and `full`
+(409, all 3,333 places taken).
 
+- **CCFF00 holders may sign up.** Only 3,333 of about 4,316 holders get the
+  CCFF00 stage, and the ones left out need a way in. Nobody knows who is picked
+  until the snapshot, so the snapshot drops picked holders from this list and
+  fills the 2,222 spots from the wallets that remain, in sign-up order. **The
+  waitlist exists to backfill those vacated spots.** `holdsCcff00` only changes
+  what the page tells a holder. It never decides whether they get in, so a
+  throttled RPC costs nothing but the hint.
+- **Order is `(created_at, address)`** in the worker and in the snapshot, so
+  the position shown at sign-up is the position the snapshot uses.
 - **One per wallet** is the D1 primary key on `whitelist.address`, and the
   address comes from the session token, never from the request body.
-- **The cap can't be overshot.** The insert is a single statement,
-  `INSERT … SELECT … WHERE (SELECT COUNT(*) …) < 1111 ON CONFLICT DO NOTHING`,
-  so two wallets racing for the last spot can't both land. A count followed by
+- **The limit can't be overshot.** The insert is a single statement,
+  `INSERT … SELECT … WHERE (SELECT COUNT(*) …) < 3333 ON CONFLICT DO NOTHING`,
+  so two wallets racing for the last place can't both land. A count followed by
   a separate insert could. The test suite races exactly that, against real
-  SQLite (`node:sqlite`). With the in-statement cap removed, it lets the list
-  reach 1,112.
-- **CCFF00 holders are checked at sign-up** with a `balanceOf` that has three
-  outcomes. A throttled RPC is `unavailable`, never "holds none", so a holder
-  can't slip in on a bad second.
+  SQLite (`node:sqlite`), and fails if the in-statement limit is removed.
 - **Closing sign-ups:** set `WHITELIST_OPEN = "0"` in `worker/wrangler.toml`
-  and deploy. The counter stays readable, and anyone already on the list still
-  sees "you're in".
+  and deploy. The counter stays readable, and anyone already signed up still
+  sees their position.
 
-**This table is the sign-up record, not the allowlist.** A wallet can buy a
-CCFF00 after joining, so the snapshot that builds the mint allowlists must
-filter CCFF00 holders out of it again.
+**This table is the sign-up record, not the allowlist.** The snapshot builds
+the allowlist from it.
 
 ```bash
-# read the list
+# read the list in snapshot order
 npx wrangler d1 execute epoker --remote --command \
-  "SELECT address, created_at FROM whitelist ORDER BY created_at"
+  "SELECT address, created_at FROM whitelist ORDER BY created_at, address"
 ```
+
+### Snapshot → OpenSea allowlists
+
+```bash
+cd worker
+node scripts/house-pass-snapshot.mjs                          # report only
+node scripts/house-pass-snapshot.mjs --write --rule=longest   # → snapshot-out/<time>/
+```
+
+The script replays every CCFF00 and HoodFi registry `Transfer` since genesis,
+then checks every token against `ownerOf` and refuses to write on any
+unexplained disagreement. It reads the whitelist from D1 (dropping wallets picked for CCFF00, first 2,222
+in sign-up order) and writes one CSV per
+stage in OpenSea's template (`Wallet address,Custom mint limit,Custom price`,
+every row `1,0`), plus `report.json` with the full CCFF00 ranking so the cut
+can be published. `--rule` is `longest` (held longest), `largest` (most held)
+or `random` with `--seed=<announced block hash>`. Output is gitignored.
+
+Robinhood Chain RPC traps the script handles: `getLogs` accepts about 5M
+blocks per call, busy ranges can time out (split them), throttling returns 429
+(wait; splitting only adds requests), and the node keeps **no old state**, so
+`ownerOf` at the snapshot block fails within minutes. Verify at latest instead,
+and explain any difference with transfers after the snapshot block.
 
 ## Known limitations
 

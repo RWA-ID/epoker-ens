@@ -11,9 +11,13 @@
  *   random   keccak(seed ‖ address) order — pass --seed=<announced block hash>
  *
  * --dedupe  a wallet picked for CCFF00 is dropped from the HoodFi list, so one
- *           person gets one allowlist pass. The whitelist already refuses CCFF00
- *           holders at sign-up; it is re-filtered here because a wallet can buy
- *           one after joining.
+ *           person gets one allowlist pass. OFF by Hector's call (2026-10-01):
+ *           a holder who also owns a HoodFi name mints in both stages.
+ *
+ * Whitelist: sign-ups in (created_at, address) order — the order the site shows
+ * as a position — minus wallets picked for CCFF00 (they mint in stage 1),
+ * first 2,222. Left-out CCFF00 holders keep their place; sign-ups past 2,222
+ * are the waitlist that backfills the spots picked holders vacate.
  *
  * Ownership comes from replaying every Transfer since genesis, then is checked
  * token by token against ownerOf via Multicall3 — a replay bug would otherwise
@@ -31,7 +35,7 @@ import { createPublicClient, encodePacked, getAddress, http, keccak256, parseAbi
 const RPC = process.env.ROBINHOOD_RPC ?? 'https://rpc.mainnet.chain.robinhood.com';
 const CCFF00 = '0x505A22Ffed8d37ebE580FfD98d2Cdb0021189146';
 const HOODFI = '0xf2bABA012244bdD7445129597350054E1B3aEe5C';
-const CAPS = { ccff00: 3333, hoodfi: 1111, whitelist: 1111 };
+const CAPS = { ccff00: 3333, whitelist: 2222, hoodfi: 1111 }; // public gets the other 1,111
 const SPAN = 5_000_000n; // largest getLogs range this RPC accepts (measured 2026-10-01)
 const IGNORE = new Set(['0x0000000000000000000000000000000000000000', '0x000000000000000000000000000000000000dead']);
 const CSV_HEADER = 'Wallet address,Custom mint limit (optional),Custom price in native token e.g. ETH (optional)';
@@ -180,9 +184,10 @@ const hfList = (args.dedupe ? hfAll.filter((a) => !ccPickedSet.has(a)) : hfAll).
 console.log(`HoodFi: ${hfTokens.size} names held by ${hf.size} wallets (ownerOf verified${hfMoved ? `; ${hfMoved} moved since` : ''}); ${hfOverlap.length} also picked for CCFF00 → list ${hfList.length}`);
 
 const wlAll = whitelistFromD1();
-const wlNowHolders = wlAll.filter((a) => cc.has(a));
-const wlList = wlAll.filter((a) => !cc.has(a)).slice(0, CAPS.whitelist);
-console.log(`Whitelist: ${wlAll.length} sign-ups; ${wlNowHolders.length} hold CCFF00 now → list ${wlList.length}`);
+const wlPicked = wlAll.filter((a) => ccPickedSet.has(a));
+const wlList = wlAll.filter((a) => !ccPickedSet.has(a)).slice(0, CAPS.whitelist);
+const wlLeftOutHolders = wlList.filter((a) => cc.has(a)).length;
+console.log(`Whitelist: ${wlAll.length} sign-ups; ${wlPicked.length} picked for CCFF00 (dropped) → list ${wlList.length}, incl. ${wlLeftOutHolders} left-out CCFF00 holders`);
 
 const heldDist = {};
 for (const h of cc.values()) heldDist[h.held] = (heldDist[h.held] ?? 0) + 1;
@@ -206,6 +211,6 @@ writeFileSync(join(dir, 'report.json'), JSON.stringify({
   block: head.toString(), rule: RULE, seed: args.seed ?? null, dedupe: !!args.dedupe, caps: CAPS,
   ccff00: ccRanked.map((r, i) => ({ rank: i + 1, address: r.address, held: r.held, since: r.since.toString(), picked: i < CAPS.ccff00 })),
   hoodfi: { owners: hfAll.length, overlapWithCcff00: hfOverlap, listed: hfList.length },
-  whitelist: { signups: wlAll.length, removedAsCcff00Holders: wlNowHolders, listed: wlList.length },
+  whitelist: { signups: wlAll.length, droppedAsCcff00Picked: wlPicked, listed: wlList.length, leftOutCcff00Holders: wlLeftOutHolders },
 }, null, 2));
 console.log(`\nWrote ${dir}/ — ccff00.csv, hoodfi.csv, whitelist.csv, report.json`);

@@ -44,18 +44,22 @@ async function post<T>(path: string, auth: ApiAuth, body?: unknown): Promise<T> 
 
 /** House Pass whitelist — mirrors worker/src/whitelist.ts. */
 export interface WhitelistStatus {
+  /** Sign-ups so far, waitlist included. */
   count: number;
   cap: number;
+  waitlist: number;
   open: boolean;
   joined?: boolean;
+  /** 1-based sign-up order; above `cap` = waitlisted. */
+  position?: number;
 }
 
 export type WhitelistJoin =
-  | { ok: true; already: boolean; count: number; cap: number }
-  | { ok: false; reason: 'closed' | 'full' | 'ccff00' | 'unavailable'; count: number; cap: number };
+  | { ok: true; already: boolean; count: number; cap: number; waitlist: number; position: number; holdsCcff00: boolean | null }
+  | { ok: false; reason: 'closed' | 'full'; count: number; cap: number; waitlist: number };
 
 /**
- * A refusal (full, closed, CCFF00 holder, chain unreachable) is an answer the
+ * A refusal (full, closed) is an answer the
  * page shows, not an error, so only auth and transport failures throw.
  */
 async function joinWhitelist(auth: ApiAuth): Promise<WhitelistJoin> {

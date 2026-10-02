@@ -13,8 +13,8 @@
  *   GET  /leaderboard            top players by net play chips
  *   GET  /profile/:address       one player's stats + bankroll
  *   POST /claim                  daily free chips (auth)
- *   GET  /whitelist?address=     House Pass sign-ups: { count, cap, open, joined? }
- *   POST /whitelist              take a spot (auth) — one per wallet, no CCFF00 holders
+ *   GET  /whitelist?address=     House Pass sign-ups: { count, cap, waitlist, open, joined?, position? }
+ *   POST /whitelist              sign up (auth) — one per wallet; past 2,222 = waitlist
  *   GET  /auth/nonce             one-time SIWE nonce
  *   POST /auth/verify            { message, signature } → { token, expiresAt }
  *
@@ -286,7 +286,7 @@ export default {
 
         const result = await joinWhitelist(env, address);
         if (result.ok) return json(result);
-        const status = { closed: 403, full: 409, ccff00: 403, unavailable: 503 }[result.reason];
+        const status = { closed: 403, full: 409 }[result.reason];
         return json(result, status);
       }
 

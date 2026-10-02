@@ -1,20 +1,31 @@
 /**
- * House Pass whitelist: 1,111 free-mint spots, one per wallet.
+ * House Pass whitelist: 2,222 free-mint spots, one per wallet, plus a 1,111
+ * waitlist behind them.
  *
- * CCFF00 holders can't take a spot — they have their own stage. The check runs
- * here at sign-up, but a wallet can buy a CCFF00 *after* joining, so the final
- * mint list must filter again at the snapshot. This table is the sign-up
- * record, not the allowlist.
+ * CCFF00 holders may sign up. Only 3,333 of ~4,316 holders are picked for the
+ * CCFF00 stage (longest holders, decided at the snapshot), and the ones left
+ * out deserve a way in. But nobody knows who is picked until the snapshot, so
+ * the snapshot drops picked holders from this list and fills the 2,222 spots
+ * in sign-up order from the wallets that remain — the waitlist backfills every
+ * spot a picked holder vacates. This table is the sign-up record, not the
+ * allowlist; `worker/scripts/house-pass-snapshot.mjs` builds that.
  *
- * The cap and the no-repeat rule live in ONE statement — the INSERT only fires
- * while the count is under the cap, and the primary key drops a repeat — so two
- * sign-ups racing for the last spot can't both land. D1 runs a statement
- * atomically; a count-then-insert in two statements could overshoot.
+ * Order is (created_at, address), here and in the snapshot, so a position
+ * shown at sign-up is the position the snapshot uses.
+ *
+ * The limit and the no-repeat rule live in ONE statement — the INSERT only
+ * fires while the count is under the limit, and the primary key drops a repeat
+ * — so two sign-ups racing for the last place can't both land. D1 runs a
+ * statement atomically; a count-then-insert in two statements could overshoot.
  */
 import { createPublicClient, http, parseAbi } from 'viem';
 import type { Env } from './env';
 
-export const WHITELIST_CAP = 1111;
+/** Whitelist spots on the allowlist. */
+export const WHITELIST_CAP = 2222;
+/** Sign-ups accepted past the cap, to backfill spots picked CCFF00 holders vacate. */
+export const WAITLIST = 1111;
+export const SIGNUP_LIMIT = WHITELIST_CAP + WAITLIST;
 
 /** CCFF00 on Robinhood Chain — same contract as frontend/components/PassChecker.tsx. */
 export const CCFF00_CONTRACT = '0x505A22Ffed8d37ebE580FfD98d2Cdb0021189146' as const;
@@ -31,8 +42,8 @@ const robinhood = {
 
 /**
  * Three answers, not two: a throttled RPC is `unavailable`, never "holds none".
- * Reading a refused call as zero would let any CCFF00 holder onto the list on a
- * bad second — the same trap handle.ts documents for name ownership.
+ * Informational only now — it decides what the page tells a holder, never
+ * whether they get in — so a failed read costs nothing but the hint.
  */
 export type HolderCheck = 'holder' | 'not-holder' | 'unavailable';
 
@@ -55,11 +66,15 @@ export async function holdsCcff00(address: string, rpcUrl = ROBINHOOD_RPC): Prom
 }
 
 export interface WhitelistStatus {
+  /** Sign-ups so far, waitlist included. */
   count: number;
   cap: number;
+  waitlist: number;
   open: boolean;
   /** Only present when the caller asked about an address. */
   joined?: boolean;
+  /** 1-based sign-up order; above `cap` means waitlisted. Only when joined. */
+  position?: number;
 }
 
 export function isOpen(env: Pick<Env, 'WHITELIST_OPEN'>): boolean {
@@ -71,49 +86,64 @@ export async function whitelistStatus(
   address?: string,
 ): Promise<WhitelistStatus> {
   const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM whitelist').first<{ n: number }>();
-  const status: WhitelistStatus = { count: Number(row?.n ?? 0), cap: WHITELIST_CAP, open: isOpen(env) };
+  const status: WhitelistStatus = {
+    count: Number(row?.n ?? 0), cap: WHITELIST_CAP, waitlist: WAITLIST, open: isOpen(env),
+  };
   if (address) {
-    const hit = await env.DB.prepare('SELECT 1 AS x FROM whitelist WHERE address = ?').bind(address).first();
-    status.joined = !!hit;
+    const mine = await env.DB.prepare('SELECT created_at AS t FROM whitelist WHERE address = ?')
+      .bind(address).first<{ t: number }>();
+    status.joined = !!mine;
+    if (mine) {
+      const ahead = await env.DB.prepare(
+        'SELECT COUNT(*) AS n FROM whitelist WHERE created_at < ? OR (created_at = ? AND address <= ?)',
+      ).bind(mine.t, mine.t, address).first<{ n: number }>();
+      status.position = Number(ahead?.n ?? 0);
+    }
   }
   return status;
 }
 
 export type JoinResult =
-  | { ok: true; already: boolean; count: number; cap: number }
-  | { ok: false; reason: 'closed' | 'full' | 'ccff00' | 'unavailable'; count: number; cap: number };
+  | { ok: true; already: boolean; count: number; cap: number; waitlist: number; position: number;
+      /** null when the chain didn't answer — the page just skips the hint. */
+      holdsCcff00: boolean | null }
+  | { ok: false; reason: 'closed' | 'full'; count: number; cap: number; waitlist: number };
 
 /**
  * Add a verified address. `checkHolder` is injectable so tests don't touch the
- * chain. Order matters: someone already on the list gets "you're in" even
- * after it closes or fills, and never costs an RPC call.
+ * chain. Someone already signed up gets their position even after sign-ups
+ * close or fill, and never costs an RPC call.
  */
 export async function joinWhitelist(
   env: Pick<Env, 'DB' | 'WHITELIST_OPEN'>,
   address: string,
   checkHolder: (address: string) => Promise<HolderCheck> = holdsCcff00,
 ): Promise<JoinResult> {
+  const sizes = { cap: WHITELIST_CAP, waitlist: WAITLIST };
   const before = await whitelistStatus(env, address);
-  const base = { count: before.count, cap: WHITELIST_CAP };
-  if (before.joined) return { ok: true, already: true, ...base };
-  if (!before.open) return { ok: false, reason: 'closed', ...base };
-  if (before.count >= WHITELIST_CAP) return { ok: false, reason: 'full', ...base };
-
-  const holder = await checkHolder(address);
-  if (holder === 'holder') return { ok: false, reason: 'ccff00', ...base };
-  if (holder === 'unavailable') return { ok: false, reason: 'unavailable', ...base };
+  if (before.joined) {
+    return { ok: true, already: true, count: before.count, ...sizes, position: before.position!, holdsCcff00: null };
+  }
+  if (!before.open) return { ok: false, reason: 'closed', count: before.count, ...sizes };
+  if (before.count >= SIGNUP_LIMIT) return { ok: false, reason: 'full', count: before.count, ...sizes };
 
   const res = await env.DB.prepare(
     `INSERT INTO whitelist (address, created_at)
      SELECT ?, ? WHERE (SELECT COUNT(*) FROM whitelist) < ?
      ON CONFLICT(address) DO NOTHING`,
-  ).bind(address, Date.now(), WHITELIST_CAP).run();
+  ).bind(address, Date.now(), SIGNUP_LIMIT).run();
 
   const after = await whitelistStatus(env, address);
-  const now = { count: after.count, cap: WHITELIST_CAP };
-  if (res.meta.changes) return { ok: true, already: false, ...now };
-  // Nothing inserted: either a second tab of the same wallet won the race, or
-  // the last spot went while the chain check ran.
-  if (after.joined) return { ok: true, already: true, ...now };
-  return { ok: false, reason: 'full', ...now };
+  // Nothing inserted and not on the list: the last place went to someone else.
+  if (!after.joined) return { ok: false, reason: 'full', count: after.count, ...sizes };
+
+  const holder = res.meta.changes ? await checkHolder(address) : 'unavailable';
+  return {
+    ok: true,
+    already: !res.meta.changes, // a second tab of the same wallet won the race
+    count: after.count,
+    ...sizes,
+    position: after.position!,
+    holdsCcff00: holder === 'unavailable' ? null : holder === 'holder',
+  };
 }

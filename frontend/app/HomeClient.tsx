@@ -82,10 +82,10 @@ const PASS_PERKS = [
  * the whitelist cap is enforced live by worker/src/whitelist.ts.
  */
 const MINT_STAGES = [
-  { name: 'CCFF00 holders', cap: '3,333', who: 'one per holder, however many you hold — first come' },
-  { name: 'HoodFi name owners', cap: '1,111', who: 'one per owner of a hoodfi.eth name at the snapshot' },
-  { name: 'Whitelist', cap: '1,111', who: 'one per wallet — sign up below' },
-  { name: 'Public', cap: '2,222', who: 'one per wallet, open to anyone' },
+  { name: 'CCFF00 holders', cap: '3,333', who: 'one per holder, however many you hold — the 3,333 longest holders at the snapshot' },
+  { name: 'Whitelist', cap: '2,222', who: 'one per wallet — sign up below, CCFF00 holders too' },
+  { name: 'HoodFi name owners', cap: '1,111', who: 'own a hoodfi.eth name at the snapshot — your way in if you miss the first two' },
+  { name: 'Public', cap: '1,111', who: 'one per wallet, open to anyone' },
 ];
 
 const HERO_STATS = [
@@ -733,7 +733,7 @@ export default function HomePage() {
 
             <div className="mt-7">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                Four stages · all free · date TBA
+                Four stages · all free · October 15
               </p>
               <ol className="mt-3 grid gap-2">
                 {MINT_STAGES.map((stage, i) => (
@@ -764,8 +764,8 @@ export default function HomePage() {
             </div>
 
             <p className="mt-5 text-[13.5px] leading-[1.6] text-faint">
-              Every stage is free — you pay only gas. The mint date is TBA and there&rsquo;s
-              no mint page yet. Follow{' '}
+              Every stage is free — you pay only gas. Minting opens October 15 on OpenSea;
+              stage times and the link go out on X first. Follow{' '}
               <a
                 href="https://x.com/hoodpokercasino"
                 target="_blank"

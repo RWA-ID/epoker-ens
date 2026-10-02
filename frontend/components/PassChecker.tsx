@@ -6,7 +6,7 @@
  * chain (and the same RPC already in the CSP) the HoodFi name lookups use.
  * Read-only: it proves nothing on its own and reserves nothing. The real
  * allowlist is drawn at the snapshot — one pass per holder whatever the
- * balance, 3,333 spots for 4,296 holders, first come — so the copy promises
+ * balance, 3,333 spots for ~4,316 holders, picked at the snapshot — so the copy promises
  * a spot in the stage, never a count of passes.
  *
  * That RPC refuses a share of calls (it is what demoted players to a bare
@@ -105,8 +105,8 @@ export function PassChecker() {
               </span>
               {' — '}
               <span className="text-muted">
-                that&rsquo;s one free pass in the CCFF00 stage (3,333 spots, first come), if
-                it still holds at the snapshot.
+                the 3,333 longest holders at the snapshot mint free in the CCFF00 stage. Miss the
+                cut and you can still take a whitelist spot below.
               </span>
             </>
           )}
