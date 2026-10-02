@@ -1,0 +1,14 @@
+{
+  "_comment": "House Pass tiers: the ONE source for the site (/pass/, #pass) and worker/scripts/house-pass-metadata.mjs. Supplies must add up to totalSupply; the metadata script refuses to run otherwise. chips = a one-time stack credited once per token, ever (a resold pass does not pay out again).",
+  "totalSupply": 7777,
+  "publicPriceEth": "0.00077",
+  "tiers": [
+    { "id": "crown-jewel",    "name": "Crown Jewel",    "supply": 77,   "chips": 1000000, "card": "Edition · 1 of 77", "image": "crown-jewel.png" },
+    { "id": "the-river",      "name": "The River",      "supply": 111,  "chips": 500000,  "card": "Street · River",    "image": "the-river.png" },
+    { "id": "the-nuts",       "name": "The Nuts",       "supply": 333,  "chips": 250000,  "card": "Rank · The Nuts",   "image": "the-nuts.png" },
+    { "id": "the-button",     "name": "The Button",     "supply": 777,  "chips": 150000,  "card": "Seat · Button",     "image": "the-button.png" },
+    { "id": "royal-flush",    "name": "Royal Flush",    "supply": 999,  "chips": 100000,  "card": "Hand · 10–A♠",      "image": "royal-flush.png" },
+    { "id": "all-in",         "name": "All In",         "supply": 2222, "chips": 50000,   "card": "Stack · 10 High",   "image": "all-in.png" },
+    { "id": "pocket-rockets", "name": "Pocket Rockets", "supply": 3258, "chips": 25000,   "card": "Hand · AA",         "image": "pocket-rockets.png" }
+  ]
+}

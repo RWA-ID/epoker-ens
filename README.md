@@ -335,23 +335,37 @@ are at risk during the window.
 
 ## House Pass NFT
 
-A membership NFT: 7,777 passes, **every stage free** (gas only), minting on
-**OpenSea from October 15, 2026**. Contract: "HoodPoker House Pass" (`HPASS`),
-ERC721 on Robinhood Chain, deployed through OpenSea Studio, 7.77% creator
-earnings, enforced. This repo holds the sign-up side, the snapshot script and
-the landing-page section (`/#pass`, linked as "House Pass NFT" in the nav).
+A membership NFT: 7,777 passes in seven tiers. The allowlist stages are free
+(gas only); the **public stage costs 0.00077 ETH**, which pays for development,
+infrastructure and maintenance. Minting on **OpenSea from October 15, 2026**. Contract:
+"HoodPoker House Pass" (`HPASS`), ERC721 on Robinhood Chain, deployed through
+OpenSea Studio, 7.77% creator earnings, enforced. This repo holds the sign-up
+side, the snapshot script, the metadata script, the landing-page section
+(`/#pass`) and the perks page (`/pass/`).
 
-**Snapshot: October 13, 2026.** CCFF00 holdings and HoodFi name ownership
-are read then, and whitelist sign-ups close (`WHITELIST_OPEN = "0"`). The
-allowlist CSVs get uploaded to OpenSea on October 14.
+**Snapshots.** The **CCFF00 cut was taken early, on 2026-10-02 at block
+78244737**, and is published with the site as `frontend/public/pass/ccff00-snapshot.json`
+(4,343 holders, the 3,333 longest picked) so the address checker on `/#pass`
+and `/pass/` can answer without a wallet. **Whitelist and HoodFi names snapshot
+on October 13, 2026**, when sign-ups close (`WHITELIST_OPEN = "0"`). That run
+must reuse the published CCFF00 list instead of re-ranking:
+
+```bash
+cd worker
+node scripts/house-pass-snapshot.mjs --write --ccff00-from=../frontend/public/pass/ccff00-snapshot.json
+```
+
+A picked holder who sells after October 2 keeps their spot; a wallet that buys
+CCFF00 after it isn't added. The allowlist CSVs get uploaded to OpenSea on
+October 14.
 
 | Stage | Who | Cap |
 | --- | --- | --- |
 | 0. Team | One wallet (the founder's), up to 100, minted first for giveaways after the mint. Its allowlist is that single address | 100 |
-| 1. CCFF00 | One per holder, however many they hold. ~4,316 holders, so the **3,333 longest holders** at the snapshot | 3,333 |
+| 1. CCFF00 | One per holder, however many they hold. 4,343 holders at block 78244737, so the **3,333 longest holders**. Free | 3,333 |
 | 2. Whitelist | One per wallet, via the sign-up on the site. CCFF00 holders may join; those picked for stage 1 are dropped at the snapshot and the waitlist backfills | 2,222 |
 | 3. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C`. Last way in before public, including for CCFF00 holders who missed the cut | 1,111 |
-| 4. Public | One per wallet | 1,111 |
+| 4. Public | One per wallet, **0.00077 ETH** | 1,111 |
 
 The team's 100 come out of the 7,777, so the public stage gets whatever is
 left after stages 0–3. Allowlist stages rarely fill completely; in the
@@ -363,8 +377,43 @@ its allowlist. Whatever a stage doesn't mint stays available to the stages
 after it.
 
 CCFF00 is `0x505A22Ffed8d37ebE580FfD98d2Cdb0021189146` on Robinhood Chain.
-The perks on the landing page are **copy, not behaviour** yet: the worker still
-grants every player the same daily chips and reads nothing about passes.
+
+### Tiers and metadata
+
+`frontend/lib/house-pass.json` is the one source for tiers. The site renders it,
+and `worker/scripts/house-pass-metadata.mjs` deals the collection from it (and
+refuses to run if the supplies don't add up to 7,777).
+
+| Tier | Supply | One-time chip stack |
+| --- | --- | --- |
+| Crown Jewel | 77 | 1,000,000 |
+| The River | 111 | 500,000 |
+| The Nuts | 333 | 250,000 |
+| The Button | 777 | 150,000 |
+| Royal Flush | 999 | 100,000 |
+| All In | 2,222 | 50,000 |
+| Pocket Rockets | 3,258 | 25,000 |
+
+Every pass also gets the shared member perks (`MEMBER_PERKS` in
+`frontend/lib/housePass.ts`). The chip stack is credited **once per token,
+ever**, keyed by token id, not wallet, so passing a pass around can't farm it.
+
+```bash
+cd worker
+node scripts/house-pass-metadata.mjs --seed=<block hash> --image-base=ipfs://<art CID>/
+```
+
+Run it **after the mint closes**, seeded with the hash of a block announced in
+advance by height. Dealt earlier, anyone holding the file could time a mint onto
+a Crown Jewel id; until the reveal the collection sits behind OpenSea's
+pre-reveal art. It writes `metadata-out/<seed>/` (gitignored): one JSON per
+token, a `metadata.csv` for Studio's bulk upload (check its header against
+OpenSea's current template first) and `assignment.json`, the token → tier map
+the worker will read.
+
+The perks are **copy, not behaviour** yet: the worker still grants every player
+the same daily chips and reads nothing about passes. They go into the worker
+once the contract address and the reveal exist.
 
 ### Whitelist
 

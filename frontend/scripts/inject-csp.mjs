@@ -57,8 +57,12 @@ const ROBINHOOD_RPC = originOf(
  * mainnet follows the resolver's OffchainLookup here. Mainnet names served by
  * some *other* offchain gateway won't resolve in the guest-list box — the price
  * of not opening connect-src to every https origin.
+ *
+ * The resolver's OffchainLookup now points at ccip.hoodfi-mcp.com (seen live
+ * 2026-10-02 — with only the workers.dev host allowed, every hoodfi name failed
+ * to resolve). The old host stays allowed: it still answers, and it costs nothing.
  */
-const HOODFI_GATEWAY = 'https://hoodfi-gateway.dmpay.workers.dev';
+const HOODFI_GATEWAYS = ['https://ccip.hoodfi-mcp.com', 'https://hoodfi-gateway.dmpay.workers.dev'];
 
 /**
  * Reown AppKit spreads over several hosts and moves between walletconnect.com,
@@ -106,7 +110,7 @@ const POLICY = [
   ['img-src', "'self' data: blob: https:"],
 
   ['connect-src', [
-    "'self'", WORKER, WORKER_WS, MAINNET_RPC, ROBINHOOD_RPC, HOODFI_GATEWAY,
+    "'self'", WORKER, WORKER_WS, MAINNET_RPC, ROBINHOOD_RPC, ...HOODFI_GATEWAYS,
     ...WALLETCONNECT, ...WALLETCONNECT_WS, ...COINBASE,
     ...PRIVY, PRIVY_RPC,
   ].join(' ')],

@@ -28,6 +28,8 @@ import { Faq } from '@/components/Faq';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
 import { PassChecker } from '@/components/PassChecker';
 import { WhitelistSignup } from '@/components/WhitelistSignup';
+import { MEMBER_PERKS, PASS_SUPPLY, PASS_TIERS, fmt, tierArt } from '@/lib/housePass';
+import { MintStages, PassFineprint } from '@/components/PassStages';
 
 const CHAIN_NAME = 'Robinhood Chain';
 
@@ -60,32 +62,6 @@ const HOW_STEPS = [
     title: 'Run it up',
     body: "Full Texas Hold'em with side pots, 30-second action timers and table chat. Win hands, climb the season board.",
   },
-];
-
-/**
- * House Pass perks. Every one of these is table time, hosting or cosmetics —
- * nothing here changes the cards, the odds or the money (there is no money).
- * Numbers mirror the worker: DAILY_CHIPS is 5,000 on a 24h cooldown today.
- */
-const PASS_PERKS = [
-  { title: '15,000 daily chips', body: 'three times the free drop, claimable every 12 hours instead of 24.' },
-  { title: 'Bust-out top-up', body: 'run your stack to zero and get back in once a day, without waiting for the drop.' },
-  { title: 'Team tournaments', body: 'build a team and host bracket nights. Anyone can play in them — members run them.' },
-  { title: 'A room that stays', body: 'a permanent private table with your name on it, reserved seats and a spectator link.' },
-  { title: 'Member cosmetics', body: 'a badge on your seat, alternate card backs and felt tints. Never an edge in a hand.' },
-  { title: 'Your numbers', body: 'full hand history export, per-opponent stats and season flair on the board.' },
-  { title: 'First through the door', body: 'new modes — sit-and-go, Omaha — open to passes before anyone else.' },
-];
-
-/**
- * Mint stages — all free, 7,777 total. Caps are Hector's 2026-10-01 numbers;
- * the whitelist cap is enforced live by worker/src/whitelist.ts.
- */
-const MINT_STAGES = [
-  { name: 'CCFF00 holders', cap: '3,333', who: 'one per holder, however many you hold — the 3,333 longest holders at the snapshot' },
-  { name: 'Whitelist', cap: '2,222', who: 'one per wallet — sign up below, CCFF00 holders too' },
-  { name: 'HoodFi name owners', cap: '1,111', who: 'own a hoodfi.eth name at the snapshot — your way in if you miss the first two' },
-  { name: 'Public', cap: '1,111', who: 'one per wallet, open to anyone' },
 ];
 
 const HERO_STATS = [
@@ -694,19 +670,19 @@ export default function HomePage() {
             Coming soon
           </span>
           <span className="rounded-full border border-cream/15 px-3 py-[6px] font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted">
-            7,777 passes
+            {fmt(PASS_SUPPLY)} passes
           </span>
         </div>
 
         <div className="mt-8 grid gap-10 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           <div>
             <img
-              src="/house-pass.jpg"
-              alt="HoodPoker House Pass membership NFT — a lime poker chip on black"
+              src={tierArt('crown-jewel')}
+              alt="Crown Jewel House Pass — a diamond inside a gold poker chip, edition of 77"
               width={720}
               height={720}
               loading="lazy"
-              className="w-full rounded-[3%] border border-acid/20 shadow-[0_18px_60px_rgba(0,0,0,0.6)]"
+              className="w-full rounded-[3%] border border-[#e8c56a]/30 shadow-[0_18px_60px_rgba(0,0,0,0.6)]"
             />
             <PassChecker />
             <WhitelistSignup />
@@ -714,13 +690,44 @@ export default function HomePage() {
 
           <div>
             <p className="max-w-[560px] text-[16.5px] leading-[1.6] text-muted">
-              7,777 passes, no more. The House Pass is a membership, not a stake: it buys more
-              table time and more ways to play with your people — never better cards. Chips stay
-              virtual, untradeable and worth nothing, exactly as they are today.
+              {fmt(PASS_SUPPLY)} passes in seven tiers. Every pass is a membership: more table
+              time and more ways to play with your people — never better cards. The rarer the
+              tier, the bigger the chip stack it comes with, up to a million for the 77 Crown
+              Jewels.
             </p>
 
-            <ul className="mt-6 grid gap-3">
-              {PASS_PERKS.map((perk) => (
+            <ul className="mt-6 grid grid-cols-2 gap-2 xs:grid-cols-4 sm:grid-cols-7 md:grid-cols-4 lg:grid-cols-7">
+              {PASS_TIERS.map((tier) => (
+                <li key={tier.id}>
+                  <Link href={`/pass/#${tier.id}`} className="group block">
+                    <img
+                      src={tierArt(tier.id)}
+                      alt={`${tier.name} House Pass`}
+                      width={720}
+                      height={720}
+                      loading="lazy"
+                      className="w-full rounded-[6%] border border-cream/10 transition-colors group-hover:border-acid/50"
+                    />
+                    <p className="mt-1.5 truncate text-[12.5px] leading-tight text-cream">{tier.name}</p>
+                    <p className="font-mono text-[10.5px] tabular-nums text-faint">
+                      {fmt(tier.supply)} · {fmt(tier.chips)}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-faint">
+              Supply · one-time chip stack ·{' '}
+              <Link href="/pass/" className="text-acid underline underline-offset-4">
+                every tier&rsquo;s perks
+              </Link>
+            </p>
+
+            <p className="mt-7 font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
+              Every pass, every tier
+            </p>
+            <ul className="mt-3 grid gap-3">
+              {MEMBER_PERKS.map((perk) => (
                 <li key={perk.title} className="flex gap-3">
                   <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-acid" />
                   <p className="text-[15px] leading-[1.55] text-cream">
@@ -731,41 +738,13 @@ export default function HomePage() {
               ))}
             </ul>
 
-            <div className="mt-7">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                Four stages · all free · October 15
-              </p>
-              <ol className="mt-3 grid gap-2">
-                {MINT_STAGES.map((stage, i) => (
-                  <li
-                    key={stage.name}
-                    className="flex items-baseline gap-3 rounded-card border border-cream/10 px-4 py-3"
-                  >
-                    <span className="font-mono text-[11px] text-faint">0{i + 1}</span>
-                    <p className="min-w-0 flex-1 text-[14.5px] leading-[1.5] text-cream">
-                      {stage.name}
-                      <span className="text-muted"> — {stage.who}</span>
-                    </p>
-                    <span className="shrink-0 font-mono text-[12px] tabular-nums text-acid">{stage.cap}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+            <MintStages />
 
-            <div className="mt-7 rounded-card border border-cream/10 bg-night-900 p-5">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                Still a for-fun game
-              </p>
-              <p className="mt-2 text-[14.5px] leading-[1.6] text-muted">
-                No chips for sale, no chip transfers between players, no cash-out and no prize
-                of value — with or without a pass. Cosmetics never touch a hand, and the
-                leaderboard ranks profit per hand so a bigger daily allowance can’t buy rank.
-              </p>
-            </div>
+            <PassFineprint />
 
             <p className="mt-5 text-[13.5px] leading-[1.6] text-faint">
-              Every stage is free — you pay only gas. Minting opens October 15 on OpenSea;
-              stage times and the link go out on X first. Follow{' '}
+              Minting opens October 15 on OpenSea; stage times and the link go out on X first.
+              Follow{' '}
               <a
                 href="https://x.com/hoodpokercasino"
                 target="_blank"

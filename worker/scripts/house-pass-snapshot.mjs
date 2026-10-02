@@ -4,6 +4,12 @@
  *
  *   node scripts/house-pass-snapshot.mjs                       # report only
  *   node scripts/house-pass-snapshot.mjs --write --rule=longest [--dedupe]
+ *   node scripts/house-pass-snapshot.mjs --write --ccff00-from=../frontend/public/pass/ccff00-snapshot.json
+ *
+ * --ccff00-from  reuse a published CCFF00 cut instead of re-ranking. The cut
+ *           was taken and published on 2026-10-02 (block 78244737); the final
+ *           run on Oct 13 MUST pass this, or it redraws the list people were
+ *           already told they're on. Whitelist + HoodFi are still read live.
  *
  * Rules for the 3,333 CCFF00 spots (4,296-odd holders, so somebody misses out):
  *   longest  earliest-acquired token still held, oldest first (ties: more held)
@@ -28,7 +34,7 @@
  * cut can be published and checked.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPublicClient, encodePacked, getAddress, http, keccak256, parseAbi, parseAbiItem } from 'viem';
 
@@ -171,9 +177,16 @@ const ccTokens = replay(await allTransfers(CCFF00, head));
 const ccMoved = await verifyOwners(CCFF00, ccTokens, head);
 const cc = holders(ccTokens);
 const ccRanked = rank(cc);
-const ccPicked = ccRanked.slice(0, CAPS.ccff00);
+// The CCFF00 cut was taken early (2026-10-02) and published with the site.
+// Later runs must reuse that list, never re-rank: a holder told "you're in"
+// can't be dropped because they sold after the published snapshot.
+const frozen = args['ccff00-from'] ? JSON.parse(readFileSync(args['ccff00-from'], 'utf8')) : null;
+const ccPicked = frozen
+  ? frozen.picked.map((address) => ({ address, ...(cc.get(address) ?? { held: 0, since: null }) }))
+  : ccRanked.slice(0, CAPS.ccff00);
 const ccPickedSet = new Set(ccPicked.map((r) => r.address));
-console.log(`CCFF00: ${ccTokens.size} tokens held by ${cc.size} wallets (ownerOf verified${ccMoved ? `; ${ccMoved} moved since` : ''}) → ${ccPicked.length} picked, ${cc.size - ccPicked.length} left out`);
+if (frozen) console.log(`CCFF00: using the frozen list from block ${frozen.block} (${frozen.picked.length} picked; ${ccPicked.filter((r) => !r.held).length} no longer hold any — they keep their spot)`);
+else console.log(`CCFF00: ${ccTokens.size} tokens held by ${cc.size} wallets (ownerOf verified${ccMoved ? `; ${ccMoved} moved since` : ''}) → ${ccPicked.length} picked, ${cc.size - ccPicked.length} left out`);
 
 const hfTokens = replay(await allTransfers(HOODFI, head));
 const hfMoved = await verifyOwners(HOODFI, hfTokens, head);
@@ -192,7 +205,7 @@ console.log(`Whitelist: ${wlAll.length} sign-ups; ${wlPicked.length} picked for 
 const heldDist = {};
 for (const h of cc.values()) heldDist[h.held] = (heldDist[h.held] ?? 0) + 1;
 console.log('CCFF00 wallets by number held:', heldDist);
-if (ccRanked.length > CAPS.ccff00) {
+if (!frozen && ccRanked.length > CAPS.ccff00) {
   const last = ccRanked[CAPS.ccff00 - 1], next = ccRanked[CAPS.ccff00];
   console.log(`Cut line: #${CAPS.ccff00} ${last.address} (held ${last.held}, since block ${last.since}) | first out ${next.address} (held ${next.held}, since ${next.since})`);
 }
@@ -208,8 +221,8 @@ writeFileSync(join(dir, 'ccff00.csv'), csv(ccPicked.map((r) => r.address)));
 writeFileSync(join(dir, 'hoodfi.csv'), csv(hfList));
 writeFileSync(join(dir, 'whitelist.csv'), csv(wlList));
 writeFileSync(join(dir, 'report.json'), JSON.stringify({
-  block: head.toString(), rule: RULE, seed: args.seed ?? null, dedupe: !!args.dedupe, caps: CAPS,
-  ccff00: ccRanked.map((r, i) => ({ rank: i + 1, address: r.address, held: r.held, since: r.since.toString(), picked: i < CAPS.ccff00 })),
+  block: head.toString(), ccff00FrozenAt: frozen?.block ?? null, rule: RULE, seed: args.seed ?? null, dedupe: !!args.dedupe, caps: CAPS,
+  ccff00: ccRanked.map((r, i) => ({ rank: i + 1, address: r.address, held: r.held, since: r.since.toString(), picked: ccPickedSet.has(r.address) })),
   hoodfi: { owners: hfAll.length, overlapWithCcff00: hfOverlap, listed: hfList.length },
   whitelist: { signups: wlAll.length, droppedAsCcff00Picked: wlPicked, listed: wlList.length, leftOutCcff00Holders: wlLeftOutHolders },
 }, null, 2));

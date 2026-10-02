@@ -11,3 +11,6 @@ out/
 
 # House Pass snapshot output (worker/scripts/house-pass-snapshot.mjs)
 snapshot-out/
+
+# House Pass metadata output (worker/scripts/house-pass-metadata.mjs)
+metadata-out/

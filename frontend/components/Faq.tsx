@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 const ITEMS = [
   {
     q: 'Is there a HoodPoker token?',
-    a: 'No. There is no token, no presale, no holding requirement and nothing to buy. Chips are virtual and have zero monetary value — the only thing at stake is your seat on the leaderboard.',
+    a: 'No. There is no token, no presale and no holding requirement. The one thing on offer is the optional House Pass NFT — free in the allowlist stages, 0.00077 ETH in the public stage — and you never need one to play. Chips are virtual and have zero monetary value — the only thing at stake is your seat on the leaderboard.',
   },
   {
     q: 'Do I need a wallet?',
