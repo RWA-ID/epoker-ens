@@ -35,9 +35,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: 'HoodPoker — free Texas Hold’em, played under your name',
   icons: {
+    // PNG first: injected wallets (Rabby) take the FIRST rel="icon" as the
+    // dapp icon, and draw a letter when they can't use it.
     icon: [
-      { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },
       { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },
     ],
     apple: { url: '/apple-touch-icon.png', type: 'image/png', sizes: '180x180' },
   },

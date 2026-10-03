@@ -14,3 +14,7 @@ snapshot-out/
 
 # House Pass metadata output (worker/scripts/house-pass-metadata.mjs)
 metadata-out/
+
+# Boombox tracks, ~180MB. Rebuilt from lib/playlist.json by
+# frontend/scripts/fetch-music.mjs - never committed.
+frontend/public/music/

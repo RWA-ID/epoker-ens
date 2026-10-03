@@ -54,10 +54,13 @@ createAppKit({
   metadata: {
     name: 'Hoodpoker',
     description: 'Play-money Texas Hold’em on Robinhood Chain — epoker.eth',
-    url: 'https://epoker.eth.limo',
+    // The origin the page is actually on (hoodpoker.fun or epoker.eth.limo),
+    // so a wallet's domain check matches what the player sees.
+    url: typeof window !== 'undefined' ? window.location.origin : 'https://hoodpoker.fun',
     // Must be a square PNG: an SVG or a wide banner renders as no icon at all
-    // in the wallet's signing prompt.
-    icons: ['https://epoker.eth.limo/icon.png'],
+    // in the wallet's signing prompt. It must also EXIST — this pointed at
+    // /icon.png, a 404, and Rabby fell back to a letter "H".
+    icons: ['https://hoodpoker.fun/icon-512.png'],
   },
   features: { analytics: false, email: false, socials: false },
   themeMode: 'dark',

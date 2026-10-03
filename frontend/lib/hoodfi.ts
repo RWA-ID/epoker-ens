@@ -7,9 +7,9 @@
  * and ids cannot be walked. The one log indexed by recipient is ERC721
  * `Transfer(from, to, tokenId)`, so:
  *
- *   1. getLogs Transfer where `to` == player, from block 0. Because `to` is
- *      indexed this is a cheap filtered query, not a wide scan — measured at
- *      ~125ms over the whole chain on the public RPC.
+ *   1. getLogs Transfer where `to` == player, from the registry's deploy
+ *      block, in 9M-block windows (the RPC refuses a range over 10M). Because
+ *      `to` is indexed each window is a cheap filtered query, not a wide scan.
  *   2. Re-check `owner(node)` for each hit. A Transfer log says the address
  *      received the name once, not that it still holds it: 6 of 25 names in
  *      the first real scan had since moved on. The index is a candidate list,
@@ -27,9 +27,11 @@ import { robinhood } from './chains';
 import {
   HOODFI_REGISTRY,
   HOODFI_REGISTRY_ABI,
+  HOODFI_REGISTRY_DEPLOY_BLOCK,
   ROBINHOOD_RPC_URL,
   TRANSFER_EVENT,
 } from './config';
+import { getLogsInWindows } from './logs';
 
 export interface HoodfiName {
   name: string;
@@ -73,13 +75,17 @@ const toNode = (tokenId: bigint) =>
  * punchiest handle wins by default.
  */
 export async function hoodfiNamesFor(address: Address): Promise<HoodfiName[]> {
-  const logs = await client.getLogs({
-    address: HOODFI_REGISTRY,
-    event: TRANSFER_EVENT,
-    args: { to: address },
-    fromBlock: 0n,
-    toBlock: 'latest',
-  });
+  // One query from block 0 started failing once the chain passed the RPC's
+  // 10M-block cap — every player lost their name, silently. See lib/logs.ts.
+  const logs = await getLogsInWindows(client, HOODFI_REGISTRY_DEPLOY_BLOCK, (fromBlock, toBlock) =>
+    client.getLogs({
+      address: HOODFI_REGISTRY,
+      event: TRANSFER_EVENT,
+      args: { to: address },
+      fromBlock,
+      toBlock,
+    }),
+  );
 
   // One address can receive the same name twice (out and back).
   const nodes = [...new Set(logs.map((l) => toNode(l.args.tokenId as bigint)))];

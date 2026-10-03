@@ -41,6 +41,13 @@ export const WORKER_WS_URL = WORKER_URL.replace(/^http/, 'ws');
  */
 export const HOODFI_REGISTRY = '0xf2bABA012244bdD7445129597350054E1B3aEe5C' as const;
 
+/**
+ * The block that registry was deployed in (from hoodfi-eth's DEPLOY.md). Log
+ * scans start here, not at 0 — the RPC caps a query at 10M blocks, so every
+ * block before the deploy is a wasted window.
+ */
+export const HOODFI_REGISTRY_DEPLOY_BLOCK = 15_164_296n;
+
 /** Parent name of every subname in that registry. */
 export const HOODFI_PARENT = 'hoodfi.eth';
 

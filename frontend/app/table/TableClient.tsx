@@ -27,6 +27,8 @@ import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PokerTable } from '@/components/PokerTable';
 import { ActionBar } from '@/components/ActionBar';
+import { Boombox } from '@/components/Boombox';
+import { stopMusic, useMusic } from '@/lib/music';
 import { TableDrawer, TablePanel, type PanelTab } from '@/components/TablePanel';
 import { ChatIcon, CollapseIcon, ExpandIcon, LinkIcon, RotateIcon, SoundIcon } from '@/components/TableIcons';
 import {
@@ -193,6 +195,8 @@ export function TableScreen({
   const [rotatePref, setRotatePref] = useState<Rotation | null>(null);
   const [panelTab, setPanelTab] = useState<PanelTab>('chat');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [musicOpen, setMusicOpen] = useState(false);
+  const music = useMusic();
   // Chat replayed on connect is history, not news — only later lines badge.
   const [chatSeenTs, setChatSeenTs] = useState(() => Date.now());
 
@@ -208,6 +212,9 @@ export function TableScreen({
     setMutedState(isMuted());
     setRotatePref(readRotatePref());
     installAudioUnlock();
+    // The player outlives this component (see lib/music.ts); leaving the
+    // table is what turns it off.
+    return stopMusic;
   }, []);
 
   // Full screen is a fixed layer; stop the page under it scrolling.
@@ -334,7 +341,7 @@ export function TableScreen({
           )}
         >
           <span className={cn('h-1.5 w-1.5 rounded-full', inHand ? 'animate-pulse bg-acid' : 'bg-dim')} />
-          {inHand ? `In hand · ${STAGE_LABEL[state.stage]}` : 'Waiting'}
+          {inHand ? `In hand · ${STAGE_LABEL[state.stage]} · pot ${formatChips(state.pot)}` : 'Waiting'}
         </span>
 
         {full && portrait && (
@@ -384,7 +391,20 @@ export function TableScreen({
           <SoundIcon muted={muted} size={11} />
           {muted ? 'Sounds off' : 'Sounds on'}
         </FeltChip>
+        {/* Docked layouts show the boombox in the side column instead. */}
+        {!docked && !sideDock && (
+          <FeltChip onClick={() => setMusicOpen((o) => !o)} pressed={musicOpen}>
+            <span className={cn(music.playing && 'text-acid')}>♪</span>
+            Music
+          </FeltChip>
+        )}
       </div>
+
+      {musicOpen && !docked && !sideDock && (
+        <div className="absolute left-2 top-9 z-30 w-[min(250px,46%)] rounded-xl border border-cream/[0.14] bg-night-950/90 p-2 shadow-[0_14px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm sm:left-3 sm:top-10">
+          <Boombox />
+        </div>
+      )}
 
       {table.error && (
         <div
@@ -433,6 +453,7 @@ export function TableScreen({
               <div className="w-[min(100cqw,150cqh)]">{felt}</div>
             </div>
             <div className={cn('flex flex-col justify-end gap-2', wide ? 'w-[clamp(220px,32%,320px)] shrink-0' : 'shrink-0')}>
+              {sideDock && <Boombox className="shrink-0" />}
               {sideDock && <div className="relative min-h-0 flex-1">{panel()}</div>}
               <ActionBar state={state} onAct={table.act} compact columns={wide ? 2 : 4} />
             </div>
@@ -461,7 +482,12 @@ export function TableScreen({
             <ActionBar state={state} onAct={table.act} />
           </div>
         </div>
-        {docked && <div className="relative min-h-0">{panel()}</div>}
+        {docked && (
+          <div className="flex min-h-0 flex-col gap-3">
+            <Boombox className="shrink-0" />
+            <div className="relative min-h-0 flex-1">{panel()}</div>
+          </div>
+        )}
       </div>
       {!docked && (
         <TableDrawer open={drawerOpen} onClose={closeDrawer}>{panel(closeDrawer)}</TableDrawer>
@@ -471,10 +497,12 @@ export function TableScreen({
 }
 
 /**
- * The room behind the felt: a night skyline at low opacity under a dark
- * vignette, so the space a 3:2 table leaves reads as a room rather than dead
- * black. Kept faint on purpose — the cards have to stay the brightest thing
- * on screen. `fixed` so it doesn't scroll with the page in the in-page view.
+ * The room behind the felt: the table art itself, blown up, blurred and
+ * darkened. PokerTable feathers its edges into it, so the room seems to carry
+ * on past the 3:2 frame. (A separate Vegas skyline used to sit here, and it
+ * framed one city inside another.) Kept dark on purpose, since the cards have
+ * to stay the brightest thing on screen. `fixed` so it doesn't scroll with the
+ * page in the in-page view.
  */
 function TableBackdrop({ inLayer = false }: { inLayer?: boolean }) {
   return (
@@ -489,10 +517,10 @@ function TableBackdrop({ inLayer = false }: { inLayer?: boolean }) {
       )}
     >
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-[0.24]"
-        style={{ backgroundImage: "url('/vegas-night.jpg')" }}
+        className="absolute inset-0 scale-110 bg-cover bg-center opacity-50 blur-[28px]"
+        style={{ backgroundImage: "url('/table-live.jpg')" }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,5,5,0.45)_0%,rgba(5,5,5,0.9)_78%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,5,5,0.2)_0%,rgba(5,5,5,0.85)_85%)]" />
     </div>
   );
 }

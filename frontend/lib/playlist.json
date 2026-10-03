@@ -1,0 +1,326 @@
+[
+  {
+    "slug": "funky-chunk",
+    "title": "Funky Chunk",
+    "file": "Funky Chunk.mp3",
+    "seconds": 239
+  },
+  {
+    "slug": "backbay-lounge",
+    "title": "Backbay Lounge",
+    "file": "Backbay Lounge.mp3",
+    "seconds": 267
+  },
+  {
+    "slug": "smooth-lovin",
+    "title": "Smooth Lovin",
+    "file": "Smooth Lovin.mp3",
+    "seconds": 259
+  },
+  {
+    "slug": "funky-boxstep",
+    "title": "Funky Boxstep",
+    "file": "Funky Boxstep .mp3",
+    "seconds": 316
+  },
+  {
+    "slug": "too-cool",
+    "title": "Too Cool",
+    "file": "Too Cool.mp3",
+    "seconds": 182
+  },
+  {
+    "slug": "hep-cats",
+    "title": "Hep Cats",
+    "file": "Hep Cats.mp3",
+    "seconds": 251
+  },
+  {
+    "slug": "disco-medusae",
+    "title": "Disco Medusae",
+    "file": "Disco Medusae.mp3",
+    "seconds": 221
+  },
+  {
+    "slug": "slow-jam",
+    "title": "Slow Jam",
+    "file": "Slow Jam.mp3",
+    "seconds": 266
+  },
+  {
+    "slug": "chillin-hard",
+    "title": "Chillin Hard",
+    "file": "Chillin Hard.mp3",
+    "seconds": 234
+  },
+  {
+    "slug": "cold-sober",
+    "title": "Cold Sober",
+    "file": "Cold Sober.mp3",
+    "seconds": 201
+  },
+  {
+    "slug": "deuces",
+    "title": "Deuces",
+    "file": "Deuces.mp3",
+    "seconds": 191
+  },
+  {
+    "slug": "jazz-brunch",
+    "title": "Jazz Brunch",
+    "file": "Jazz Brunch.mp3",
+    "seconds": 323
+  },
+  {
+    "slug": "bossa-antigua",
+    "title": "Bossa Antigua",
+    "file": "Bossa Antigua.mp3",
+    "seconds": 283
+  },
+  {
+    "slug": "apero-hour",
+    "title": "Apero Hour",
+    "file": "Apero Hour.mp3",
+    "seconds": 283
+  },
+  {
+    "slug": "miami-viceroy",
+    "title": "Miami Viceroy",
+    "file": "Miami Viceroy.mp3",
+    "seconds": 268
+  },
+  {
+    "slug": "zigzag",
+    "title": "ZigZag",
+    "file": "ZigZag.mp3",
+    "seconds": 225
+  },
+  {
+    "slug": "chill-wave",
+    "title": "Chill Wave",
+    "file": "Chill Wave.mp3",
+    "seconds": 240
+  },
+  {
+    "slug": "your-call",
+    "title": "Your Call",
+    "file": "Your Call.mp3",
+    "seconds": 224
+  },
+  {
+    "slug": "celebration",
+    "title": "Celebration",
+    "file": "Celebration.mp3",
+    "seconds": 278
+  },
+  {
+    "slug": "loopster",
+    "title": "Loopster",
+    "file": "Loopster.mp3",
+    "seconds": 182
+  },
+  {
+    "slug": "shaving-mirror",
+    "title": "Shaving Mirror",
+    "file": "Shaving Mirror.mp3",
+    "seconds": 206
+  },
+  {
+    "slug": "district-four",
+    "title": "District Four",
+    "file": "District Four.mp3",
+    "seconds": 248
+  },
+  {
+    "slug": "vicious",
+    "title": "Vicious",
+    "file": "Vicious.mp3",
+    "seconds": 225
+  },
+  {
+    "slug": "nonstop",
+    "title": "Nonstop",
+    "file": "Nonstop.mp3",
+    "seconds": 191
+  },
+  {
+    "slug": "thief-in-the-night",
+    "title": "Thief in the Night",
+    "file": "Thief in the Night.mp3",
+    "seconds": 185
+  },
+  {
+    "slug": "maccary-bay",
+    "title": "Maccary Bay",
+    "file": "Maccary Bay.mp3",
+    "seconds": 240
+  },
+  {
+    "slug": "ultralounge",
+    "title": "Ultralounge",
+    "file": "Ultralounge.mp3",
+    "seconds": 317
+  },
+  {
+    "slug": "george-street-shuffle",
+    "title": "George Street Shuffle",
+    "file": "George Street Shuffle.mp3",
+    "seconds": 268
+  },
+  {
+    "slug": "sidewalk-shade",
+    "title": "Sidewalk Shade",
+    "file": "Sidewalk Shade.mp3",
+    "seconds": 158
+  },
+  {
+    "slug": "mining-by-moonlight",
+    "title": "Mining by Moonlight",
+    "file": "Mining by Moonlight.mp3",
+    "seconds": 204
+  },
+  {
+    "slug": "rollin-at-5",
+    "title": "Rollin at 5",
+    "file": "Rollin at 5.mp3",
+    "seconds": 131
+  },
+  {
+    "slug": "rocket-power",
+    "title": "Rocket Power",
+    "file": "Rocket Power.mp3",
+    "seconds": 154
+  },
+  {
+    "slug": "fuzzball-parade",
+    "title": "Fuzzball Parade",
+    "file": "Fuzzball Parade.mp3",
+    "seconds": 314
+  },
+  {
+    "slug": "poppers-and-prosecco",
+    "title": "Poppers and Prosecco",
+    "file": "Poppers and Prosecco.mp3",
+    "seconds": 194
+  },
+  {
+    "slug": "lobby-time",
+    "title": "Lobby Time",
+    "file": "Lobby Time.mp3",
+    "seconds": 193
+  },
+  {
+    "slug": "night-in-venice",
+    "title": "Night in Venice",
+    "file": "Night in Venice.mp3",
+    "seconds": 218
+  },
+  {
+    "slug": "on-hold-for-you",
+    "title": "On Hold for You",
+    "file": "On Hold for You.mp3",
+    "seconds": 218
+  },
+  {
+    "slug": "zazie",
+    "title": "Zazie",
+    "file": "Zazie.mp3",
+    "seconds": 213
+  },
+  {
+    "slug": "samba-isobel",
+    "title": "Samba Isobel",
+    "file": "Samba Isobel.mp3",
+    "seconds": 250
+  },
+  {
+    "slug": "casa-bossa-nova",
+    "title": "Casa Bossa Nova",
+    "file": "Casa Bossa Nova.mp3",
+    "seconds": 242
+  },
+  {
+    "slug": "cuban-sandwich",
+    "title": "Cuban Sandwich",
+    "file": "Cuban Sandwich.mp3",
+    "seconds": 195
+  },
+  {
+    "slug": "octoblues",
+    "title": "OctoBlues",
+    "file": "OctoBlues.mp3",
+    "seconds": 256
+  },
+  {
+    "slug": "leopard-print-elevator",
+    "title": "Leopard Print Elevator",
+    "file": "Leopard Print Elevator.mp3",
+    "seconds": 328
+  },
+  {
+    "slug": "bossabossa",
+    "title": "BossaBossa",
+    "file": "BossaBossa.mp3",
+    "seconds": 167
+  },
+  {
+    "slug": "disco-con-tutti",
+    "title": "Disco con Tutti",
+    "file": "Disco con Tutti.mp3",
+    "seconds": 236
+  },
+  {
+    "slug": "electro-cabello",
+    "title": "Electro Cabello",
+    "file": "Electro Cabello.mp3",
+    "seconds": 191
+  },
+  {
+    "slug": "realizer",
+    "title": "Realizer",
+    "file": "Realizer.mp3",
+    "seconds": 310
+  },
+  {
+    "slug": "boogie-party",
+    "title": "Boogie Party",
+    "file": "Boogie Party.mp3",
+    "seconds": 272
+  },
+  {
+    "slug": "street-party",
+    "title": "Street Party",
+    "file": "Street Party.mp3",
+    "seconds": 173
+  },
+  {
+    "slug": "miami-nights-extended-theme",
+    "title": "Miami Nights - Extended Theme",
+    "file": "Miami Nights - Extended Theme.mp3",
+    "seconds": 201
+  },
+  {
+    "slug": "laser-groove",
+    "title": "Laser Groove",
+    "file": "Laser Groove.mp3",
+    "seconds": 168
+  },
+  {
+    "slug": "tiki-bar-mixer",
+    "title": "Tiki Bar Mixer",
+    "file": "Tiki Bar Mixer.mp3",
+    "seconds": 212
+  },
+  {
+    "slug": "bummin-on-tremelo",
+    "title": "Bummin on Tremelo",
+    "file": "Bummin on Tremelo.mp3",
+    "seconds": 192
+  },
+  {
+    "slug": "werq",
+    "title": "Werq",
+    "file": "Werq.mp3",
+    "seconds": 162
+  }
+]

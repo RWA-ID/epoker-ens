@@ -19,6 +19,7 @@ export function Seat({
   deadline,
   onSit,
   cardSide = 'above',
+  inward,
 }: {
   view: SeatView | null;
   holeCards?: Card[];       // your own cards, only for your seat
@@ -28,6 +29,8 @@ export function Seat({
   onSit?: () => void;       // provided for empty seats when you can sit
   /** Where hole cards and the bet sit relative to the pill — toward the felt. */
   cardSide?: 'above' | 'left' | 'right';
+  /** Front seats only: which way the middle of the felt is. Your enlarged hand slides that way. */
+  inward?: 'left' | 'right';
 }) {
   // Empty seat → sit-down button (or placeholder for spectators mid-hand).
   if (!view) {
@@ -46,7 +49,13 @@ export function Seat({
   const showCards = view.shownCards ?? (isYou ? holeCards : undefined);
   const hasCards = inHand && !view.folded && (showCards?.length || !isYou);
 
-  const cardClass = 'h-8 w-[22px] text-[10px] sm:h-10 sm:w-7 sm:text-xs tilt:h-6 tilt:w-[17px] tilt:text-[9px]';
+  // Your own face-up hand is drawn much larger than everyone else's: at
+  // 28x40 on desktop it couldn't be read without leaning into the screen.
+  // Capped at 54x76: at 60x84 it ran into the next seat's cards on 8 seats.
+  const yourHand = isYou && !!showCards?.length;
+  const cardClass = yourHand
+    ? 'h-12 w-[34px] text-sm sm:h-[64px] sm:w-[45px] sm:text-xl md:h-[76px] md:w-[54px] md:text-2xl tilt:h-9 tilt:w-[26px] tilt:text-xs'
+    : 'h-8 w-[22px] text-[10px] sm:h-10 sm:w-7 sm:text-xs tilt:h-6 tilt:w-[17px] tilt:text-[9px]';
   const faceDown = hasCards && !showCards?.length;
 
   // On a phone (below sm, or tilt) the felt is too small for cards beside a
@@ -118,7 +127,15 @@ export function Seat({
 
       {/* Hole cards and the street bet, on the felt side of the pill */}
       {(hasCards || view.bet > 0) && (
-        <div className={cn('flex flex-col items-center gap-1', faceDown && !view.bet && 'hidden sm:flex tilt:hidden')}>
+        <div
+          className={cn(
+            'flex flex-col items-center gap-1',
+            faceDown && !view.bet && 'hidden sm:flex tilt:hidden',
+            // Above the pill, your enlarged hand reached the side seat's cards and bet.
+            yourHand && cardSide === 'above' && inward === 'right' && 'sm:translate-x-[60%] tilt:translate-x-0',
+            yourHand && cardSide === 'above' && inward === 'left' && 'sm:-translate-x-[60%] tilt:translate-x-0',
+          )}
+        >
           {hasCards ? (
             <div className={cn('flex gap-1', faceDown && 'hidden sm:flex tilt:hidden')}>
               {showCards?.length ? (

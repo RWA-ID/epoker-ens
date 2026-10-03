@@ -26,15 +26,15 @@ import { Seat } from './Seat';
  */
 type SeatAnchor = 'center' | 'left' | 'right';
 type CardSide = 'above' | 'left' | 'right';
-const SEAT_POS: Array<{ left: string; top: string; anchor: SeatAnchor; cards: CardSide }> = [
-  { left: '24%', top: '80%', anchor: 'center', cards: 'above' }, // 0 front left
+const SEAT_POS: Array<{ left: string; top: string; anchor: SeatAnchor; cards: CardSide; inward?: 'left' | 'right' }> = [
+  { left: '24%', top: '80%', anchor: 'center', cards: 'above', inward: 'right' }, // 0 front left
   { left: '1.5%', top: '64%', anchor: 'left', cards: 'right' },  // 1 left, low
   { left: '3.5%', top: '41%', anchor: 'left', cards: 'right' },  // 2 left, high
   { left: '29%', top: '27%', anchor: 'center', cards: 'left' },  // 3 back left
   { left: '71%', top: '27%', anchor: 'center', cards: 'right' }, // 4 back right
   { left: '96.5%', top: '41%', anchor: 'right', cards: 'left' }, // 5 right, high
   { left: '98.5%', top: '64%', anchor: 'right', cards: 'left' }, // 6 right, low
-  { left: '76%', top: '80%', anchor: 'center', cards: 'above' }, // 7 front right
+  { left: '76%', top: '80%', anchor: 'center', cards: 'above', inward: 'left' }, // 7 front right
 ];
 
 const ANCHOR_CLASS: Record<SeatAnchor, string> = {
@@ -57,6 +57,32 @@ const SEAT_LAYOUTS: Record<number, number[]> = {
   8: [0, 1, 2, 3, 4, 5, 6, 7],
 };
 
+/**
+ * Fades the art's edges into the page backdrop (a blurred copy of the same
+ * room) so the table reads as a room, not a framed photo. Two gradients,
+ * intersected: sides and top fade, the bottom only a touch, since the front
+ * chairs run off the bottom edge anyway.
+ */
+const FEATHER = {
+  maskImage:
+    'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 96%, transparent)',
+  WebkitMaskImage:
+    'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 96%, transparent)',
+  maskComposite: 'intersect',
+  WebkitMaskComposite: 'source-in',
+} as const;
+
+/** The room, its edges feathered into the page backdrop. */
+function TableArt() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 bg-cover bg-center"
+      style={{ ...FEATHER, backgroundImage: "url('/table-live.jpg')" }}
+    />
+  );
+}
+
 export function PokerTable({
   state,
   onSit,
@@ -75,19 +101,18 @@ export function PokerTable({
   return (
     <div className="relative mx-auto w-full max-w-6xl select-none">
       {/* The table art */}
-      <div className="relative aspect-[3/2] w-full overflow-hidden rounded-[22px] border border-acid-400/25 shadow-[0_0_0_1px_rgba(0,0,0,0.6),0_30px_70px_rgba(0,0,0,0.6)]">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('/table-live.jpg')" }}
-        />
+      <div className="relative aspect-[3/2] w-full overflow-hidden">
+        <TableArt />
 
         {/* Pot + community cards, over the cleared centre of the felt */}
         <div className="absolute left-1/2 top-[57%] flex -translate-x-1/2 -translate-y-1/2 scale-[0.62] flex-col items-center gap-3 rounded-[20px] px-5 py-4 [background:radial-gradient(closest-side,rgba(4,6,2,0.82),rgba(4,6,2,0.15))] sm:scale-[0.8] md:scale-95 tilt:scale-[0.62]">
+          {/* `pot` is every chip committed this hand, the current street's
+              bets included, so this is the full amount at stake. */}
           {state.pot > 0 && (
-            <div className="flex items-center gap-2 rounded-full border border-acid-400/40 bg-night-950/80 px-4 py-1.5">
-              <span className="text-[13px] text-acid-400">◉</span>
-              <span className="font-mono text-sm font-semibold tabular-nums text-acid">
-                Pot {formatChips(state.pot)}
+            <div className="flex flex-col items-center rounded-2xl border border-acid-400/50 bg-night-950/85 px-5 py-1.5 shadow-[0_0_24px_rgba(204,255,0,0.15)]">
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-dim">Total pot</span>
+              <span className="font-mono text-xl font-semibold tabular-nums leading-tight text-acid sm:text-2xl">
+                {formatChips(state.pot)}
               </span>
             </div>
           )}
@@ -179,6 +204,7 @@ export function PokerTable({
               inHand={inHand}
               deadline={state.actionDeadline}
               cardSide={pos.cards}
+              inward={pos.inward}
               onSit={canSit && !seatMap.get(seatIdx) ? () => onSit(seatIdx) : undefined}
             />
           </div>
