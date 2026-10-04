@@ -66,7 +66,7 @@ export const MINT_STAGES = [
     price: 'Free',
     who: `snapshot taken ${CCFF00_SNAPSHOT.date}: the 3,333 longest of ${fmt(CCFF00_SNAPSHOT.holders)} holders, one pass each`,
   },
-  { name: 'Whitelist', cap: '2,222', price: 'Free', who: 'one per wallet — sign up below, including CCFF00 holders who missed the cut' },
+  { name: 'Whitelist', cap: '2,222', price: 'Free', who: 'one per person — repost our pinned post on X, then sign up with your handle, including CCFF00 holders who missed the cut' },
   { name: 'HoodFi name owners', cap: '1,111', price: 'Free', who: 'own a hoodfi.eth name at the October 13 snapshot' },
   { name: 'Public', cap: '1,111', price: `${PUBLIC_PRICE_ETH} ETH`, who: 'one per wallet, open to anyone. The price funds development, infrastructure and maintenance' },
 ];

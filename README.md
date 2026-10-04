@@ -47,7 +47,7 @@ Built by [@ensgianteth](https://x.com/ensgianteth) · Play at
   leaderboard (net chips, hands won, biggest pot) and a daily +5,000 chip
   claim.
 - **House Pass whitelist** — 2,222 free-mint spots (plus a waitlist) for the House Pass NFT,
-  one per wallet, with a live counter. See [House Pass NFT](#house-pass-nft).
+  one per X handle and per wallet, with a live counter. See [House Pass NFT](#house-pass-nft).
 
 ## Architecture
 
@@ -62,7 +62,7 @@ epoker-eth/
 │   └── pin.mjs                pins out/ to IPFS via Pinata
 └── worker/                    Cloudflare Worker + Durable Objects + D1
     ├── src/index.ts           router: /tables /leaderboard /profile /claim /whitelist + WS forwarding
-    ├── src/whitelist.ts       House Pass whitelist: 2,222 spots + 1,111 waitlist, one per wallet
+    ├── src/whitelist.ts       House Pass whitelist: 2,222 spots + 1,111 waitlist, one per handle + wallet
     ├── src/table.ts           TableDO — ONE Durable Object per table, all game logic
     ├── src/session.ts         SIWE nonces + verification, HMAC session tokens
     ├── src/auth.ts            legacy static-signature check (OFF: ALLOW_LEGACY_SIG=0)
@@ -363,7 +363,7 @@ October 14.
 | --- | --- | --- |
 | 0. Team | One wallet (the founder's), up to 100, minted first for giveaways after the mint. Its allowlist is that single address | 100 |
 | 1. CCFF00 | One per holder, however many they hold. 4,343 holders at block 78244737, so the **3,333 longest holders**. Free | 3,333 |
-| 2. Whitelist | One per wallet, via the sign-up on the site. CCFF00 holders may join; those picked for stage 1 are dropped at the snapshot and the waitlist backfills | 2,222 |
+| 2. Whitelist | One per person: repost the pinned post on X, then sign up on the site with your X handle + wallet (reposts checked at the snapshot). CCFF00 holders may join; those picked for stage 1 are dropped at the snapshot and the waitlist backfills | 2,222 |
 | 3. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C`. Last way in before public, including for CCFF00 holders who missed the cut | 1,111 |
 | 4. Public | One per wallet, **0.00077 ETH** | 1,111 |
 
@@ -436,10 +436,18 @@ Refusals are answers the page shows, not errors: `closed` (403) and `full`
   throttled RPC costs nothing but the hint.
 - **Order is `(created_at, address)`** in the worker and in the snapshot, so
   the position shown at sign-up is the position the snapshot uses.
-- **One per wallet** is the D1 primary key on `whitelist.address`, and the
-  address comes from the session token, never from the request body.
+- **v2 (2026-10-04): X handle + pasted wallet, no wallet connection.** v1
+  proved the wallet with SIWE, and a script signed up 1,999 fresh wallets in
+  12 minutes (moved to `whitelist_burst_20261004`). Now: **one per handle**
+  (unique index on `whitelist.x_handle`) and **one per wallet** (primary key),
+  a Cloudflare Turnstile check that fails closed (`TURNSTILE_SECRET`), and a
+  per-IP limit. Reposts can't be read without X's paid API, so the snapshot
+  checks them: `--x-reposters=<file>` keeps only handles that reposted.
+- **The count is one row**, `whitelist_meta`, kept exact by insert/delete
+  triggers (migration 004). It used to be `COUNT(*)` on every 15s poll from
+  every open tab, which ran out D1's free daily reads.
 - **The limit can't be overshot.** The insert is a single statement,
-  `INSERT … SELECT … WHERE (SELECT COUNT(*) …) < 3333 ON CONFLICT DO NOTHING`,
+  `INSERT OR IGNORE … SELECT … WHERE (SELECT v FROM whitelist_meta …) < 3333`,
   so two wallets racing for the last place can't both land. A count followed by
   a separate insert could. The test suite races exactly that, against real
   SQLite (`node:sqlite`), and fails if the in-statement limit is removed.

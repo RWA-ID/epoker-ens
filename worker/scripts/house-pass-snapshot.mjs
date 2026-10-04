@@ -22,7 +22,16 @@
  *
  * Whitelist: sign-ups in (created_at, address) order — the order the site shows
  * as a position — minus wallets picked for CCFF00 (they mint in stage 1),
- * first 2,222. Left-out CCFF00 holders keep their place; sign-ups past 2,222
+ * first 2,222.
+ *
+ * --x-reposters=<file>  the handles that reposted the pinned post, one per
+ *           line (@name, name or an x.com URL — parsed like the sign-up form).
+ *           Since 2026-10-04 every sign-up carries an X handle, and only those
+ *           in this file are kept; the 28 sign-ups from before then have no
+ *           handle and are kept as they are. Without the flag nothing is
+ *           filtered and the report says how many handles went unchecked —
+ *           the final Oct 13 run should always pass it. whitelist-signups.csv
+ *           (address, handle, kept) is written either way for a manual pass. Left-out CCFF00 holders keep their place; sign-ups past 2,222
  * are the waitlist that backfills the spots picked holders vacate.
  *
  * Ownership comes from replaying every Transfer since genesis, then is checked
@@ -162,8 +171,17 @@ function rank(by) {
 
 function whitelistFromD1() {
   const out = execFileSync('npx', ['wrangler', 'd1', 'execute', 'epoker', '--remote', '--json', '--command',
-    'SELECT address, created_at FROM whitelist ORDER BY created_at, address'], { encoding: 'utf8' });
-  return JSON.parse(out)[0].results.map((r) => r.address.toLowerCase());
+    'SELECT address, x_handle FROM whitelist ORDER BY created_at, address'], { encoding: 'utf8' });
+  return JSON.parse(out)[0].results.map((r) => ({ address: r.address.toLowerCase(), handle: r.x_handle ?? null }));
+}
+
+/** Same reduction as parseHandle in src/whitelist.ts, so a pasted URL matches a typed handle. */
+function handleOf(raw) {
+  let s = String(raw ?? '').trim();
+  const url = s.match(/^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/([^/?#\s]+)/i);
+  if (url) s = url[1];
+  s = s.replace(/^@/, '').toLowerCase();
+  return /^[a-z0-9_]{1,15}$/.test(s) ? s : null;
 }
 
 const csv = (addresses) => [CSV_HEADER, ...addresses.map((a) => `${getAddress(a)},1,0`)].join('\n') + '\n';
@@ -196,7 +214,17 @@ const hfOverlap = hfAll.filter((a) => ccPickedSet.has(a));
 const hfList = (args.dedupe ? hfAll.filter((a) => !ccPickedSet.has(a)) : hfAll).slice(0, CAPS.hoodfi);
 console.log(`HoodFi: ${hfTokens.size} names held by ${hf.size} wallets (ownerOf verified${hfMoved ? `; ${hfMoved} moved since` : ''}); ${hfOverlap.length} also picked for CCFF00 → list ${hfList.length}`);
 
-const wlAll = whitelistFromD1();
+const wlRows = whitelistFromD1();
+const reposters = args['x-reposters']
+  ? new Set(readFileSync(args['x-reposters'], 'utf8').split(/\r?\n|,/).map(handleOf).filter(Boolean))
+  : null;
+// A legacy row (no handle) is kept; a handle row needs to be in the reposters
+// file, when one is given.
+const wlKept = (r) => !r.handle || !reposters || reposters.has(r.handle);
+const wlAll = wlRows.filter(wlKept).map((r) => r.address);
+const wlHandles = wlRows.filter((r) => r.handle).length;
+if (reposters) console.log(`X reposters: ${reposters.size} handles in ${args['x-reposters']}; ${wlRows.length - wlAll.length} of ${wlHandles} handle sign-ups did not repost (dropped)`);
+else console.log(`X reposters: NOT CHECKED — ${wlHandles} handle sign-ups kept unverified. Pass --x-reposters=<file> for the final run.`);
 const wlPicked = wlAll.filter((a) => ccPickedSet.has(a));
 const wlList = wlAll.filter((a) => !ccPickedSet.has(a)).slice(0, CAPS.whitelist);
 const wlLeftOutHolders = wlList.filter((a) => cc.has(a)).length;
@@ -220,10 +248,12 @@ mkdirSync(dir, { recursive: true });
 writeFileSync(join(dir, 'ccff00.csv'), csv(ccPicked.map((r) => r.address)));
 writeFileSync(join(dir, 'hoodfi.csv'), csv(hfList));
 writeFileSync(join(dir, 'whitelist.csv'), csv(wlList));
+writeFileSync(join(dir, 'whitelist-signups.csv'),
+  ['address,x_handle,kept', ...wlRows.map((r) => `${r.address},${r.handle ?? ''},${wlKept(r) ? 1 : 0}`)].join('\n') + '\n');
 writeFileSync(join(dir, 'report.json'), JSON.stringify({
   block: head.toString(), ccff00FrozenAt: frozen?.block ?? null, rule: RULE, seed: args.seed ?? null, dedupe: !!args.dedupe, caps: CAPS,
   ccff00: ccRanked.map((r, i) => ({ rank: i + 1, address: r.address, held: r.held, since: r.since.toString(), picked: ccPickedSet.has(r.address) })),
   hoodfi: { owners: hfAll.length, overlapWithCcff00: hfOverlap, listed: hfList.length },
-  whitelist: { signups: wlAll.length, droppedAsCcff00Picked: wlPicked, listed: wlList.length, leftOutCcff00Holders: wlLeftOutHolders },
+  whitelist: { signups: wlRows.length, repostChecked: !!reposters, droppedNoRepost: wlRows.length - wlAll.length, droppedAsCcff00Picked: wlPicked, listed: wlList.length, leftOutCcff00Holders: wlLeftOutHolders },
 }, null, 2));
-console.log(`\nWrote ${dir}/ — ccff00.csv, hoodfi.csv, whitelist.csv, report.json`);
+console.log(`\nWrote ${dir}/ — ccff00.csv, hoodfi.csv, whitelist.csv, whitelist-signups.csv, report.json`);

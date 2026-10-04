@@ -14,7 +14,7 @@
  *   GET  /profile/:address       one player's stats + bankroll
  *   POST /claim                  daily free chips (auth)
  *   GET  /whitelist?address=     House Pass sign-ups: { count, cap, waitlist, open, joined?, position? }
- *   POST /whitelist              sign up (auth) — one per wallet; past 2,222 = waitlist
+ *   POST /whitelist              sign up { address, handle, turnstile } — no auth; one per wallet + per X handle
  *   GET  /auth/nonce             one-time SIWE nonce
  *   POST /auth/verify            { message, signature } → { token, expiresAt }
  *
@@ -27,7 +27,8 @@ import type { Env, RateLimiter } from './env';
 import { verifyAuth } from './auth';
 import { issueNonce, issueToken, isAllowedOrigin, verifySiwe, verifyToken } from './session';
 import { MAX_PLAYERS, PRACTICE_TABLE_ID, WhitelistEntry } from './poker/types';
-import { joinWhitelist, whitelistStatus } from './whitelist';
+import { joinWhitelist, OWN_HANDLE, parseHandle, parseWallet, whitelistStatus } from './whitelist';
+import { turnstileOk } from './turnstile';
 
 export { TableDO } from './table';
 
@@ -280,13 +281,26 @@ export default {
       }
 
       if (path === '/whitelist' && request.method === 'POST') {
-        const address = await requireAuth(request, url, env);
-        if (!address) return json({ error: 'unauthorized' }, 401);
-        if (!(await underLimit(env.CREATE_LIMITER, `wl:${address}`))) return json({ error: 'slow down' }, 429);
+        // v2: no session. X handle + pasted wallet + a Turnstile token — see
+        // src/whitelist.ts for why a wallet signature stopped being the gate.
+        if (!(await underLimit(env.AUTH_LIMITER, `wl:${ip}`))) return json({ error: 'slow down' }, 429);
+        const body = (await request.json().catch(() => ({}))) as {
+          address?: unknown; handle?: unknown; turnstile?: unknown;
+        };
+        const address = parseWallet(body.address);
+        if (!address) return json({ error: 'That doesn’t look like a wallet address (0x… , 42 characters).' }, 400);
+        const handle = parseHandle(body.handle);
+        if (!handle) return json({ error: 'Paste your X handle or your repost link.' }, 400);
+        if (handle === OWN_HANDLE) {
+          return json({ error: 'That’s our post’s link — paste your own X handle instead.' }, 400);
+        }
+        if (!(await turnstileOk(env, body.turnstile, ip))) {
+          return json({ error: 'The human check didn’t pass — refresh the page and try again.' }, 403);
+        }
 
-        const result = await joinWhitelist(env, address);
+        const result = await joinWhitelist(env, address, handle);
         if (result.ok) return json(result);
-        const status = { closed: 403, full: 409 }[result.reason];
+        const status = { closed: 403, full: 409, 'handle-taken': 409 }[result.reason];
         return json(result, status);
       }
 

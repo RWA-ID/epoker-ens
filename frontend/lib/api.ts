@@ -56,24 +56,27 @@ export interface WhitelistStatus {
 
 export type WhitelistJoin =
   | { ok: true; already: boolean; count: number; cap: number; waitlist: number; position: number; holdsCcff00: boolean | null }
-  | { ok: false; reason: 'closed' | 'full'; count: number; cap: number; waitlist: number };
+  | { ok: false; reason: 'closed' | 'full' | 'handle-taken'; count: number; cap: number; waitlist: number };
 
 /**
- * A refusal (full, closed) is an answer the
- * page shows, not an error, so only auth and transport failures throw.
+ * v2: no session — X handle + pasted wallet + a Turnstile token. A refusal
+ * (full, closed, handle taken) is an answer the page shows, not an error, so
+ * only bad input and transport failures throw — with the worker's own message,
+ * which is written for the person reading it.
  */
-async function joinWhitelist(auth: ApiAuth): Promise<WhitelistJoin> {
+async function joinWhitelist(body: { address: string; handle: string; turnstile: string }): Promise<WhitelistJoin> {
   const res = await fetch(`${WORKER_URL}/whitelist`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${auth.token}` },
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-  if (res.status === 401) {
-    clearSession(auth.address);
-    throw new Error('Session expired — please try again.');
-  }
   const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
   if (typeof data?.ok !== 'boolean') {
-    throw new Error(typeof data?.error === 'string' ? data.error : `Whitelist failed: ${res.status}`);
+    throw new Error(
+      typeof data?.error === 'string'
+        ? data.error
+        : res.status === 429 ? 'Too many tries — wait a minute and try again.' : `Whitelist failed: ${res.status}`,
+    );
   }
   return data as unknown as WhitelistJoin;
 }

@@ -57,6 +57,13 @@ export default function PrivacyPage() {
           Signing in briefly stores a random one-time code (a nonce), with no address attached;
           it is deleted when used and expires after ten minutes.
         </p>
+        <p>
+          If you sign up for the House Pass whitelist, we store a separate row: the wallet
+          address you paste, the X handle you give us, and when you signed up. We use it to
+          build the mint allowlist — including checking the handle against the public list of
+          accounts that reposted our pinned post — and nothing else. It is not joined to your
+          player row.
+        </p>
       </Clause>
 
       <Clause n={3} title="Chat is not logged">
@@ -83,6 +90,7 @@ export default function PrivacyPage() {
             'Your sign-in session, in sessionStorage — it expires after 24 hours and disappears when you close the tab.',
             'Which of your names you chose as a handle, whether you muted the sounds, and whether you rotate the full-screen table, in localStorage.',
             'Your wallet connection state, kept by the wallet library in localStorage and IndexedDB.',
+            'The wallet you signed up for the whitelist with, in localStorage, so the page can show your place in line.',
           ]}
         />
         <p>
@@ -112,6 +120,8 @@ export default function PrivacyPage() {
             'Public RPC endpoints — used to read names and avatar records; they see the requests and the IP making them.',
             'The IPFS gateway serving this page, such as eth.limo — it sees which pages you load.',
             'Name services — resolving a handle is a public lookup.',
+            'Cloudflare Turnstile — the human check on the whitelist form; it sees your browser and IP while it runs, under Cloudflare’s own privacy policy.',
+            'X — checking reposts means reading X’s public list of who reposted our post.',
           ]}
         />
         <p>

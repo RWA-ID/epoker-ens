@@ -32,6 +32,18 @@ export const WORKER_URL =
 export const WORKER_WS_URL = WORKER_URL.replace(/^http/, 'ws');
 
 /**
+ * Turnstile site key for the whitelist form — public by design (the secret is
+ * TURNSTILE_SECRET on the worker). Widget "HoodPoker whitelist", Managed, for
+ * hoodpoker.fun, www, epoker.eth.limo/.link and localhost; pre-clearance OFF
+ * (it would set a cf_clearance cookie, and the privacy page promises none).
+ */
+export const TURNSTILE_SITE_KEY =
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '0x4AAAAAAFNnI6nAtB8wtsDZ';
+
+/** The pinned post whitelist sign-ups must repost. */
+export const WHITELIST_POST_URL = 'https://x.com/hoodpokercasino/status/2106784743563923583';
+
+/**
  * hoodfi.eth's L2 registry on Robinhood Chain (chain 4663).
  *
  * A Durin `L2Registry`: an ERC721 where `tokenId == uint256(namehash)`, plus
