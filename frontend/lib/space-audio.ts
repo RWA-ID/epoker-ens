@@ -20,6 +20,7 @@
  */
 import type { SpaceTrack } from './types';
 import type { SpaceOp } from './api';
+import { setCapturing } from './sounds';
 
 type Request = <T>(op: SpaceOp, body?: unknown) => Promise<T>;
 type Sdp = { type: 'offer' | 'answer'; sdp: string };
@@ -50,6 +51,11 @@ export class SpaceAudio {
   private early = new Map<string, MediaStreamTrack>();
   private meter: ReturnType<typeof setInterval> | null = null;
   private closed = false;
+  /** Last stage tracks we were told about, for retries. */
+  private lastTracks: SpaceTrack[] = [];
+  /** Pull attempts per speaker session, for backoff. */
+  private attempts = new Map<string, number>();
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private request: Request,
@@ -104,6 +110,7 @@ export class SpaceAudio {
   /** Match what we pull to the stage's live tracks. Safe to call on every state. */
   sync(tracks: SpaceTrack[]) {
     if (this.closed) return;
+    this.lastTracks = tracks;
     const want = new Map(tracks.filter((t) => t.address !== this.me).map((t) => [t.sessionId, t]));
     const add = [...want.values()].filter((t) => !this.pulled.has(t.sessionId));
     const gone = [...this.pulled.values()].filter((p) => !want.has(p.sessionId));
@@ -122,18 +129,26 @@ export class SpaceAudio {
       const res = await this.request<{
         offer?: Sdp;
         requiresImmediateRenegotiation?: boolean;
-        tracks: { mid?: string; sessionId?: string }[];
+        tracks: { mid?: string; sessionId?: string; retry?: boolean }[];
       }>('pull', { tracks: add.map((t) => ({ sessionId: t.sessionId })) }).catch(() => null);
 
-      if (!res?.tracks?.length) {
-        for (const t of add) this.pulled.delete(t.sessionId); // retried on the next state
-        return;
+      // A speaker who just unmuted is still connecting, and the SFU says
+      // "track not found" until their audio flows. Anything that didn't get a
+      // mid is released and pulled again shortly.
+      let retry = false;
+      for (const t of add) {
+        const got = res?.tracks?.find((x) => x.sessionId === t.sessionId && x.mid);
+        const p = this.pulled.get(t.sessionId);
+        if (got && p) {
+          p.mid = got.mid!;
+          this.attempts.delete(t.sessionId);
+        } else {
+          this.pulled.delete(t.sessionId);
+          retry = true;
+        }
       }
-      for (const t of res.tracks) {
-        const p = t.sessionId ? this.pulled.get(t.sessionId) : undefined;
-        if (p && t.mid) p.mid = t.mid;
-      }
-      if (res.offer) {
+      if (retry) this.scheduleRetry(add.map((t) => t.sessionId));
+      if (res?.offer) {
         await this.pc.setRemoteDescription(res.offer);
         await this.pc.setLocalDescription(await this.pc.createAnswer());
         if (res.requiresImmediateRenegotiation) {
@@ -146,6 +161,23 @@ export class SpaceAudio {
         if (early) { this.early.delete(p.mid); this.play(p, early); }
       }
     });
+  }
+
+  private scheduleRetry(sessionIds: string[]) {
+    let n = 0;
+    for (const sid of sessionIds) {
+      if (this.pulled.get(sid)?.mid) continue;
+      const a = (this.attempts.get(sid) ?? 0) + 1;
+      this.attempts.set(sid, a);
+      n = Math.max(n, a);
+    }
+    if (!n || this.retryTimer) return;
+    // 0.8s, 1.6s, 3.2s… capped at 8s — a speaker can take a few seconds to connect.
+    const delay = Math.min(800 * 2 ** (n - 1), 8000);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.sync(this.lastTracks);
+    }, delay);
   }
 
   private onTrack(e: RTCTrackEvent) {
@@ -196,6 +228,9 @@ export class SpaceAudio {
         return;
       }
       this.stopMic();
+      // iOS: the table's sounds declare a playback-only audio session, which
+      // can't capture. Switch before asking for the mic.
+      setCapturing(true);
       const media = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
@@ -230,6 +265,7 @@ export class SpaceAudio {
     this.mic = null;
     this.micTransceiver = null;
     this.micAnalyser = null;
+    setCapturing(false);
   }
 
   /* ---------------- glow ---------------- */
@@ -257,6 +293,7 @@ export class SpaceAudio {
     if (this.closed) return;
     this.closed = true;
     if (this.meter) clearInterval(this.meter);
+    if (this.retryTimer) clearTimeout(this.retryTimer);
     this.stopMic();
     for (const p of [...this.pulled.values()]) this.dropPulled(p);
     this.pc.close();

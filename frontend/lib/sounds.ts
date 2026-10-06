@@ -30,11 +30,31 @@ function audio(): AudioContext | null {
   return ctx;
 }
 
+/**
+ * True while a Space has the mic open. iOS refuses getUserMedia with
+ * "AudioSession category is not compatible with audio capture" under
+ * 'playback', and unlockAudio() below runs on every tap — so it must not put
+ * 'playback' back while someone is talking.
+ */
+let capturing = false;
+
+function applyAudioSession() {
+  const nav = navigator as AudioSessionNavigator;
+  // Safari 16.4+: play through the ringer switch like a media app would;
+  // 'play-and-record' does that too and also allows the mic.
+  try { if (nav.audioSession) nav.audioSession.type = capturing ? 'play-and-record' : 'playback'; } catch { /* unsupported */ }
+}
+
+/** The Space opened (true) or released (false) the mic — see lib/space-audio.ts. */
+export function setCapturing(on: boolean) {
+  if (typeof navigator === 'undefined') return;
+  capturing = on;
+  applyAudioSession();
+}
+
 /** Call from inside a user gesture: resume and play one silent sample. */
 export function unlockAudio() {
-  const nav = navigator as AudioSessionNavigator;
-  // Safari 16.4+: play through the ringer switch like a media app would.
-  try { if (nav.audioSession) nav.audioSession.type = 'playback'; } catch { /* unsupported */ }
+  applyAudioSession();
   const ac = audio();
   if (!ac) return;
   try {

@@ -13,6 +13,18 @@ export type PanelTab = 'chat' | 'log' | 'space';
 
 const TAB_LABEL: Record<PanelTab, string> = { chat: 'Chat', log: 'Hand log', space: 'Space' };
 
+/**
+ * One colour per tab so each is findable at a glance: lime, silver, black.
+ * All three stay coloured; the selected one is full strength with a ring,
+ * the others dimmed until hovered. The black tab carries a hairline border,
+ * or it would vanish into the panel.
+ */
+const TAB_STYLE: Record<PanelTab, { base: string; ring: string; dot: string }> = {
+  chat: { base: 'bg-acid text-ink', ring: 'ring-acid', dot: 'bg-ink' },
+  space: { base: 'bg-[#c9ccd1] text-ink', ring: 'ring-[#e4e6ea]', dot: 'bg-ink' },
+  log: { base: 'bg-black text-cream border border-cream/35', ring: 'ring-cream/70', dot: 'bg-acid' },
+};
+
 export function TablePanel({
   tab,
   onTab,
@@ -47,7 +59,7 @@ export function TablePanel({
         className,
       )}
     >
-      <div className="flex shrink-0 border-b border-cream/10" role="tablist">
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-cream/10 p-2" role="tablist">
         {tabs.map((t) => (
           <button
             key={t}
@@ -55,13 +67,16 @@ export function TablePanel({
             aria-selected={tab === t}
             onClick={() => onTab(t)}
             className={cn(
-              'flex-1 px-2 py-[11px] font-mono text-[10px] uppercase tracking-[0.18em] transition-colors',
-              tab === t ? 'text-acid shadow-[inset_0_-2px_0_#ccff00]' : 'text-dim hover:text-cream',
+              'flex flex-1 items-center justify-center gap-1.5 rounded-btn px-2 py-[9px] text-[12px] font-extrabold uppercase tracking-[0.12em] transition-[opacity,box-shadow]',
+              TAB_STYLE[t].base,
+              tab === t
+                ? cn('opacity-100 ring-2 ring-offset-2 ring-offset-night-900', TAB_STYLE[t].ring)
+                : 'opacity-[0.55] hover:opacity-[0.85]',
             )}
           >
             {TAB_LABEL[t]}
             {t === 'space' && spaceLive && (
-              <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-acid align-middle" />
+              <span className={cn('inline-block h-1.5 w-1.5 animate-pulse rounded-full', TAB_STYLE[t].dot)} />
             )}
           </button>
         ))}
@@ -69,7 +84,7 @@ export function TablePanel({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="px-4 font-mono text-[14px] text-dim transition-colors hover:text-acid"
+            className="px-3 font-mono text-[14px] text-dim transition-colors hover:text-acid"
           >
             ✕
           </button>

@@ -202,7 +202,13 @@ export class TableDO implements DurableObject {
       } catch (err) {
         if (err instanceof SpaceError) return Response.json({ error: err.message }, { status: err.status });
         console.error('space', spaceOp, err);
-        return Response.json({ error: 'The audio server didn’t answer — try again.' }, { status: 502 });
+        // The SFU's own error code is safe to show (no secret in it) and makes
+        // a report from a player diagnosable without a log tail.
+        const detail = err instanceof Error ? err.message.replace(/^sfu /, '').slice(0, 160) : '';
+        return Response.json(
+          { error: `The audio server didn’t answer — try again.${detail ? ` (${spaceOp}: ${detail})` : ''}` },
+          { status: 502 },
+        );
       }
     }
 

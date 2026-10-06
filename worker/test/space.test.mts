@@ -21,6 +21,8 @@ function fakeSfu() {
   let n = 0;
   const calls: string[] = [];
   const closed: string[] = []; // "session:mid"
+  /** Publisher sessions whose audio isn't flowing yet (SFU: not_found_track_error). */
+  const notReady = new Set<string>();
   const sfu: Sfu = {
     async newSession() { calls.push('new'); return `s${++n}`; },
     async addTracks(sid, body) {
@@ -31,13 +33,15 @@ function fakeSfu() {
       return {
         sessionDescription: { type: 'offer', sdp: 'v=0 offer' },
         requiresImmediateRenegotiation: true,
-        tracks: body.tracks.map((t, i) => ({ ...t, mid: String(10 + i) })),
+        tracks: body.tracks.map((t, i) => notReady.has(t.sessionId!)
+          ? { ...t, mid: '', errorCode: 'not_found_track_error', errorDescription: 'Track not found on remote peer' }
+          : { ...t, mid: String(10 + i) }),
       };
     },
     async renegotiate(sid) { calls.push(`reneg:${sid}`); },
     async closeTracks(sid, mids) { for (const m of mids) closed.push(`${sid}:${m}`); },
   };
-  return { sfu, calls, closed };
+  return { sfu, calls, closed, notReady };
 }
 
 function fakeState() {
@@ -177,6 +181,26 @@ const offer = { type: 'offer', sdp: 'v=0 mic' };
   say(guest, { type: 'space:mute', address: HOST });
   say(guest, { type: 'space:invite', address: addr(2) });
   check('a listener can neither mute the host nor invite', guest.errors().length >= 2 && guest.space()?.you === 'listener');
+  await (table as any).spaceRoom.end('test over');
+}
+
+/* ---------------- 2b. pulling a speaker who is still connecting ---------------- */
+{
+  const { sfu, notReady } = fakeSfu();
+  const table = await makeTable({}, sfu);
+  const host = connect(table, HOST);
+  connect(table, addr(2));
+  say(host, { type: 'space:start' });
+  await audio(table, HOST, 'connect');
+  await audio(table, HOST, 'publish', { offer, mid: '0' });
+  await audio(table, addr(2), 'connect');
+  notReady.add('s1');
+  const early = await audio(table, addr(2), 'pull', { tracks: [{ sessionId: 's1' }] });
+  check('a not-yet-flowing track is a retry, not a failure',
+    early.status === 200 && early.body.tracks[0]?.retry === true && !early.body.tracks[0]?.mid && early.body.offer?.type === 'offer');
+  notReady.delete('s1');
+  const later = await audio(table, addr(2), 'pull', { tracks: [{ sessionId: 's1' }] });
+  check('the retry gets the track', later.body.tracks[0]?.mid === '10' && !later.body.tracks[0]?.retry);
   await (table as any).spaceRoom.end('test over');
 }
 

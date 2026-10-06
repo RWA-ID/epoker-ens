@@ -90,10 +90,10 @@ export function realtimeSfu(appId: string, appSecret: string): Sfu {
       return (await call<{ sessionId: string }>('POST', '/sessions/new')).sessionId;
     },
     async addTracks(sessionId, body) {
-      const result = await call<SfuTracksResult>('POST', `/sessions/${sessionId}/tracks/new`, body);
-      const failed = result.tracks?.find((t) => t.errorCode);
-      if (failed) throw new Error(`sfu track: ${failed.errorCode} ${failed.errorDescription ?? ''}`.trim());
-      return result;
+      // Per-track errors come back inside a 200 — the caller decides. (A pull
+      // of a speaker whose connection is still coming up fails with
+      // not_found_track_error while the rest of the request succeeds.)
+      return call<SfuTracksResult>('POST', `/sessions/${sessionId}/tracks/new`, body);
     },
     async renegotiate(sessionId, answer) {
       await call('PUT', `/sessions/${sessionId}/renegotiate`, { sessionDescription: answer });
@@ -353,6 +353,8 @@ export class Space {
           sessionDescription: offer,
           tracks: [{ location: 'local', mid, trackName: MIC_TRACK }],
         });
+        const failed = result.tracks?.find((t) => t.errorCode);
+        if (failed) throw new Error(`sfu publish: ${failed.errorCode} ${failed.errorDescription ?? ''}`.trim());
         // Demoted while the SFU was answering — shut it straight back off.
         if (!this.onStage(address) || this.audio.get(address) !== a) {
           await this.sfu.closeTracks(a.sessionId, [mid]).catch(() => {});
@@ -376,10 +378,17 @@ export class Space {
         const result = await this.sfu.addTracks(a.sessionId, {
           tracks: [...new Set(wanted)].map((sessionId) => ({ location: 'remote', sessionId, trackName: MIC_TRACK })),
         });
+        // A track that failed (usually: its speaker's connection is still
+        // coming up) is reported per track; the browser retries it shortly.
+        // The SFU still sends an offer that must be answered either way.
         return {
           offer: result.sessionDescription,
           requiresImmediateRenegotiation: !!result.requiresImmediateRenegotiation,
-          tracks: (result.tracks ?? []).map((t) => ({ mid: t.mid, sessionId: t.sessionId })),
+          tracks: (result.tracks ?? []).map((t) => ({
+            mid: t.errorCode ? undefined : t.mid || undefined,
+            sessionId: t.sessionId,
+            retry: t.errorCode ? true : undefined,
+          })),
         };
       }
 
