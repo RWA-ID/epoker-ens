@@ -40,7 +40,7 @@ export interface HoodfiName {
   avatar: string | null;
 }
 
-const client = createPublicClient({
+export const client = createPublicClient({
   chain: robinhood,
   transport: http(ROBINHOOD_RPC_URL),
 });

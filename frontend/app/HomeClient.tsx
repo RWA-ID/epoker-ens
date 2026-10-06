@@ -8,21 +8,15 @@
  * the season board from `api.leaderboard()`.
  */
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getEnsAddress } from '@wagmi/core';
-import { isAddress } from 'viem';
-import { normalize } from 'viem/ens';
-import { useConnect, useWallet } from '@/lib/wallet';
 import { api } from '@/lib/api';
-import { ensureAuth } from '@/lib/auth';
 import { useIdentity } from '@/lib/identity';
-import { wagmiConfig } from '@/lib/appkit';
-import type { WhitelistEntry, LobbyTable } from '@/lib/types';
+import type { LobbyTable } from '@/lib/types';
 import { SITE_URL } from '@/lib/seo';
 import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { CreateTable } from '@/components/CreateTable';
 import { Ticker } from '@/components/Ticker';
 import { Faq } from '@/components/Faq';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
@@ -32,17 +26,6 @@ import { MEMBER_PERKS, PASS_SUPPLY, PASS_TIERS, fmt, tierArt } from '@/lib/house
 import { MintStages, PassFineprint } from '@/components/PassStages';
 
 const CHAIN_NAME = 'Robinhood Chain';
-
-const TABLE_NAME_IDEAS = [
-  'Hood Degens',
-  'Green Candle Club',
-  'Paper Hands Only',
-  'Diamond Hands',
-  'Meme Stonk Lounge',
-  'Midnight Margin Call',
-  'Late Reg',
-  'The Nut Flush',
-];
 
 const BLIND_FILTERS = ['All', '5/10', '10/20', '25/50', '50/100'] as const;
 
@@ -94,28 +77,11 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 export default function HomePage() {
-  const router = useRouter();
-  const open = useConnect();
-  const { address, isConnected, isRestoring } = useIdentity();
-  const { signMessage } = useWallet();
+  const { isRestoring } = useIdentity();
 
   const [stake, setStake] = useState<string>('All');
-  const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [tableName, setTableName] = useState('');
-  const [smallBlind, setSmallBlind] = useState(10);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [maxPlayers, setMaxPlayers] = useState(6);
-  const [guestInput, setGuestInput] = useState('');
-  const [guests, setGuests] = useState<WhitelistEntry[]>([]);
-  const [guestError, setGuestError] = useState<string | null>(null);
-  const [resolvingGuest, setResolvingGuest] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  const startIdea = useMemo(() => Math.floor(Math.random() * TABLE_NAME_IDEAS.length), []);
-  const [ideaIdx, setIdeaIdx] = useState(startIdea);
-  const suggestion = TABLE_NAME_IDEAS[ideaIdx % TABLE_NAME_IDEAS.length];
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['tables'],
@@ -141,64 +107,10 @@ export default function HomePage() {
   const scrollTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
-  const addGuest = async () => {
-    const input = guestInput.trim().toLowerCase();
-    if (!input) return;
-    setGuestError(null);
-    setResolvingGuest(true);
-    try {
-      let entry: WhitelistEntry;
-      if (isAddress(input)) {
-        entry = { address: input, handle: null };
-      } else {
-        const name = input.includes('.') ? input : `${input}.eth`;
-        // Mainnet resolution also covers hoodfi.eth subnames: the L1 resolver
-        // answers them over CCIP, so `gm.hoodfi.eth` resolves here too.
-        const resolved = await getEnsAddress(wagmiConfig, { name: normalize(name), chainId: 1 });
-        if (!resolved) throw new Error(`Couldn’t resolve “${name}” — check the spelling.`);
-        entry = { address: resolved.toLowerCase(), handle: name };
-      }
-      if (entry.address === address?.toLowerCase()) {
-        throw new Error('You’re the host — you’re already on the list.');
-      }
-      if (guests.some((g) => g.address === entry.address)) {
-        throw new Error('Already on the guest list.');
-      }
-      setGuests((g) => [...g, entry].slice(0, 23));
-      setGuestInput('');
-    } catch (err) {
-      setGuestError(err instanceof Error ? err.message : 'Could not resolve that name');
-    } finally {
-      setResolvingGuest(false);
-    }
-  };
-
-  const createTable = async () => {
-    if (!address) return open();
-    if (isPrivate && guests.length === 0) {
-      setCreateError('Add at least one guest to the list (or make the table public).');
-      return;
-    }
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const { token } = await ensureAuth(address, signMessage);
-      const { id } = await api.createTable(
-        { address, token },
-        {
-          name: tableName || suggestion,
-          smallBlind,
-          isPrivate,
-          maxPlayers: isPrivate ? maxPlayers : undefined,
-          whitelist: isPrivate ? guests : undefined,
-        },
-      );
-      router.push(`/table/?id=${id}`);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create table');
-    } finally {
-      setCreating(false);
-    }
+  // The hero and lobby header both jump straight to an open create form.
+  const openCreate = () => {
+    setShowCreate(true);
+    requestAnimationFrame(() => scrollTo('create'));
   };
 
   const copyInvite = async () => {
@@ -241,7 +153,10 @@ export default function HomePage() {
             <Button size="lg" className="shadow-cta" onClick={() => scrollTo('lobby')}>
               {isRestoring ? 'Reconnecting…' : 'Take a Seat →'}
             </Button>
-            <Button size="lg" variant="outline" onClick={() => scrollTo('how')}>
+            <Button size="lg" variant="outline" onClick={openCreate}>
+              + Open a table
+            </Button>
+            <Button size="lg" variant="ghost" onClick={() => scrollTo('how')}>
               How it plays
             </Button>
           </div>
@@ -270,6 +185,9 @@ export default function HomePage() {
             <h2 className="hp-display hp-h2 mt-3 text-cream">Open Tables</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
+            <Button onClick={openCreate} className="mr-2 px-5 py-3 text-[15px]">
+              + Open a table
+            </Button>
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
               Blinds
             </span>
@@ -308,195 +226,13 @@ export default function HomePage() {
           <p className="mt-6 font-mono text-[11.5px] text-faint">
             {filtered.length === 0
               ? stake === 'All'
-                ? 'No tables yet — open one and it lands here instantly.'
-                : 'No tables at those blinds yet — open one and it lands here instantly.'
+                ? 'No tables yet — open one below and it lands here instantly.'
+                : 'No tables at those blinds yet — open one below and it lands here instantly.'
               : `Lobby refreshes live · ${filtered.length} table${filtered.length === 1 ? '' : 's'} matching`}
           </p>
         )}
 
-        {/* Open a table — not in the landing comp, but the lobby has to have a
-            way in, so it is styled to match and collapsed by default. */}
-        <div className="mt-7 rounded-card border border-cream/[0.12] bg-night-900">
-          <button
-            onClick={() => setShowCreate((s) => !s)}
-            className="flex w-full items-center justify-between gap-4 px-5 py-[18px] text-left"
-          >
-            <span className="hp-display hp-w85 text-[18px] text-cream">Open your own table</span>
-            <span
-              className={cn(
-                'font-mono text-[20px] leading-none text-acid transition-transform duration-200',
-                showCreate && 'rotate-45',
-              )}
-            >
-              +
-            </span>
-          </button>
-
-          {showCreate && (
-            <div className="space-y-4 border-t border-cream/[0.08] px-5 py-5">
-              <div>
-                <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                  Table name
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    value={tableName}
-                    onChange={(e) => setTableName(e.target.value)}
-                    placeholder={suggestion}
-                    maxLength={40}
-                    className="min-w-0 flex-1 rounded-btn border border-cream/[0.16] bg-night-950 px-3.5 py-2.5 text-sm text-cream outline-none transition-colors placeholder:text-ghost focus:border-acid"
-                  />
-                  <button
-                    title="Roll a table name"
-                    onClick={() => {
-                      const next = ideaIdx + 1;
-                      setIdeaIdx(next);
-                      setTableName(TABLE_NAME_IDEAS[next % TABLE_NAME_IDEAS.length]);
-                    }}
-                    className="w-11 shrink-0 rounded-btn border border-cream/[0.16] text-lg text-dim transition-colors hover:border-acid hover:text-acid"
-                  >
-                    🎲
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                  Blind size (play chips)
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[5, 10, 25, 50].map((sb) => (
-                    <button
-                      key={sb}
-                      onClick={() => setSmallBlind(sb)}
-                      className={cn(
-                        'rounded-btn border py-2.5 font-mono text-sm transition-colors',
-                        smallBlind === sb
-                          ? 'border-acid bg-acid/[0.16] text-acid'
-                          : 'border-cream/[0.16] text-dim hover:border-acid/50',
-                      )}
-                    >
-                      {sb}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 font-mono text-[11px] text-faint">
-                  Start stack: {formatChips(smallBlind * 2 * 100)} chips (100 big blinds)
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                  Visibility
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { value: false, label: 'Public', hint: 'Listed in the lobby' },
-                    { value: true, label: 'Private', hint: 'Invite-only by name' },
-                  ] as const).map((opt) => (
-                    <button
-                      key={String(opt.value)}
-                      onClick={() => setIsPrivate(opt.value)}
-                      className={cn(
-                        'rounded-btn border px-2 py-2.5 text-center transition-colors',
-                        isPrivate === opt.value
-                          ? 'border-acid bg-acid/[0.16] text-acid'
-                          : 'border-cream/[0.16] text-dim hover:border-acid/50',
-                      )}
-                    >
-                      <span className="hp-display hp-w85 block text-[14px]">{opt.label}</span>
-                      <span className="mt-0.5 block font-mono text-[10px] text-faint">
-                        {opt.hint}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {isPrivate && (
-                <>
-                  <div>
-                    <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                      Players (table size)
-                    </label>
-                    <div className="grid grid-cols-7 gap-1.5">
-                      {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => setMaxPlayers(n)}
-                          className={cn(
-                            'rounded-btn border py-2 font-mono text-sm transition-colors',
-                            maxPlayers === n
-                              ? 'border-acid bg-acid/[0.16] text-acid'
-                              : 'border-cream/[0.16] text-dim hover:border-acid/50',
-                          )}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-2 font-mono text-[11px] text-faint">
-                      {maxPlayers < 4
-                        ? `Hands start as soon as all ${maxPlayers} players are seated.`
-                        : 'Hands start at 4 seated players.'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-                      Guest list — only these wallets can sit
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        value={guestInput}
-                        onChange={(e) => { setGuestInput(e.target.value); setGuestError(null); }}
-                        onKeyDown={(e) => e.key === 'Enter' && !resolvingGuest && addGuest()}
-                        placeholder="gm.hoodfi.eth, vitalik.eth or 0x…"
-                        className="min-w-0 flex-1 rounded-btn border border-cream/[0.16] bg-night-950 px-3.5 py-2.5 text-sm text-cream outline-none transition-colors placeholder:text-ghost focus:border-acid"
-                      />
-                      <button
-                        onClick={addGuest}
-                        disabled={resolvingGuest || !guestInput.trim()}
-                        className="shrink-0 rounded-btn border border-acid/40 px-4 font-mono text-[11px] uppercase tracking-[0.12em] text-acid transition-colors hover:bg-acid/10 disabled:opacity-40"
-                      >
-                        {resolvingGuest ? '…' : 'Add'}
-                      </button>
-                    </div>
-                    {guestError && (
-                      <p className="mt-2 font-mono text-[11px] text-red-400">{guestError}</p>
-                    )}
-                    {guests.length > 0 && (
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
-                        {guests.map((g) => (
-                          <span
-                            key={g.address}
-                            className="flex items-center gap-1.5 rounded-full border border-cream/[0.16] py-1 pl-2.5 pr-1.5 font-mono text-[11px] text-dim"
-                          >
-                            {displayName(g.handle, g.address)}
-                            <button
-                              onClick={() => setGuests((l) => l.filter((x) => x.address !== g.address))}
-                              className="flex h-4 w-4 items-center justify-center rounded-full transition-colors hover:bg-cream/10 hover:text-cream"
-                              aria-label={`Remove ${displayName(g.handle, g.address)}`}
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {createError && (
-                <p className="font-mono text-[11px] text-red-400">{createError}</p>
-              )}
-              <Button className="w-full" onClick={createTable} disabled={creating}>
-                {creating ? 'Creating…' : isConnected ? 'Create table' : 'Sign in to create'}
-              </Button>
-            </div>
-          )}
-        </div>
+        <CreateTable open={showCreate} onOpenChange={setShowCreate} />
       </section>
 
       {/* ========================= How it plays ========================= */}
