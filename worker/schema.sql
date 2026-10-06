@@ -12,6 +12,7 @@
 CREATE TABLE IF NOT EXISTS players (
   address       TEXT PRIMARY KEY,             -- lowercase 0x address
   handle        TEXT,                          -- hoodfi.eth subname or mainnet ENS name
+  handle_pick   TEXT,                          -- the name they CHOSE (POST /handle); handle = last sat under
   avatar        TEXT,                          -- raw `avatar` text record, NOT a resolved URL
   handle_checked INTEGER NOT NULL DEFAULT 0,    -- unix ms the handle was last verified on-chain
   bankroll      INTEGER NOT NULL DEFAULT 10000,-- starting play chips
@@ -48,3 +49,16 @@ CREATE TABLE IF NOT EXISTS whitelist (
   address     TEXT PRIMARY KEY,
   created_at  INTEGER NOT NULL
 );
+
+-- Private-table invites for the lobby's "You're invited" (GET /invites). Live DB: migrations/005.
+CREATE TABLE IF NOT EXISTS table_invites (
+  address     TEXT    NOT NULL,
+  table_id    TEXT    NOT NULL,
+  name        TEXT    NOT NULL,
+  host        TEXT    NOT NULL,
+  small_blind INTEGER NOT NULL,
+  space       INTEGER NOT NULL DEFAULT 0,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (address, table_id)
+);
+CREATE INDEX IF NOT EXISTS table_invites_table ON table_invites (table_id);

@@ -195,6 +195,8 @@ export interface LobbyTable {
 export interface PlayerProfile {
   address: string;
   handle: string | null;
+  /** The name they chose to play under (set from the name picker). */
+  handlePick?: string | null;
   avatar: string | null;
   bankroll: number;
   netProfit: number;

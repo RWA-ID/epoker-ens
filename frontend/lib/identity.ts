@@ -15,8 +15,11 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useEnsName, useEnsText } from 'wagmi';
+import { useQuery } from '@tanstack/react-query';
 import { useHoodfiNames } from './hoodfi';
 import { useWallet, type WalletSource } from './wallet';
+import { api } from './api';
+import { cachedSession } from './auth';
 
 const PICK_KEY = (address: string) => `epoker:handle:${address.toLowerCase()}`;
 
@@ -59,9 +62,29 @@ export function useIdentity(): Identity {
   const [pick, setPick] = useState<string | null>(null);
   useEffect(() => setPick(readPick(address)), [address]);
 
+  // The name this wallet chose in the picker, saved by the worker — so a pick
+  // made on one device holds on the next. This browser's own pick wins.
+  // (Not `profile.handle`: that's whatever name they last sat under, which
+  // would carry a bad default forward.)
+  const { data: serverHandle } = useQuery({
+    queryKey: ['profile-handle', address?.toLowerCase()],
+    queryFn: async () => (await api.profile(address!)).profile?.handlePick ?? null,
+    enabled: !!address,
+    staleTime: 300_000,
+  });
+
+  // A pick made before signing in reaches the server the next time a session
+  // is around (any page that renders this after sign-in).
+  useEffect(() => {
+    if (!address || !pick || pick === serverHandle) return;
+    const session = cachedSession(address);
+    if (session) void api.saveHandle({ address, token: session.token }, pick).catch(() => {});
+  }, [address, pick, serverHandle, hoodfi]);
+
   const owned = hoodfi ?? [];
-  // A stored pick is only honoured while they still own that name.
-  const picked = pick && owned.some((n) => n.name === pick) ? pick : null;
+  // A pick is only honoured while they still own that name.
+  const choice = pick ?? serverHandle ?? null;
+  const picked = choice && owned.some((n) => n.name === choice) ? choice : null;
   const hoodfiHandle = picked ?? owned[0]?.name ?? null;
   const handle = hoodfiHandle ?? ensName ?? null;
 
@@ -87,6 +110,10 @@ export function useIdentity(): Identity {
         /* private mode — the pick just won't persist */
       }
       setPick(name);
+      // Saved server-side too when already signed in; otherwise the next
+      // table join records it (the worker stores the name you sit under).
+      const session = cachedSession(address);
+      if (name && session) void api.saveHandle({ address, token: session.token }, name).catch(() => {});
     },
     [address],
   );

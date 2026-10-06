@@ -14,6 +14,8 @@
  *                                (auth) — SDP relayed to the Realtime SFU, see src/space.ts
  *   GET  /leaderboard            top players by net play chips
  *   GET  /profile/:address       one player's stats + bankroll
+ *   POST /handle                 save which owned name to play under { name } (auth)
+ *   GET  /invites                private tables you're on the guest list for (auth)
  *   POST /claim                  daily free chips (auth)
  *   GET  /whitelist?address=     House Pass sign-ups: { count, cap, waitlist, open, joined?, position? }
  *   POST /whitelist              sign up { address, handle, turnstile } — no auth; one per wallet + per X handle
@@ -31,6 +33,7 @@ import { issueNonce, issueToken, isAllowedOrigin, verifySiwe, verifyToken } from
 import { MAX_PLAYERS, PRACTICE_TABLE_ID, WhitelistEntry } from './poker/types';
 import { joinWhitelist, OWN_HANDLE, parseHandle, parseWallet, whitelistStatus } from './whitelist';
 import { turnstileOk } from './turnstile';
+import { checkHandle } from './handle';
 
 export { TableDO } from './table';
 
@@ -189,6 +192,16 @@ export default {
           ).bind(id, name, smallBlind, 'waiting', Date.now()).run();
         }
 
+        // So guests find the table in their lobby, not only through the link.
+        if (isPrivate) {
+          const now = Date.now();
+          await env.DB.batch(whitelist.map((w) => env.DB.prepare(
+            `INSERT OR REPLACE INTO table_invites (address, table_id, name, host, small_blind, space, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          ).bind(w.address, id, name, address, smallBlind, body.space === true ? 1 : 0, now)))
+            .catch((err) => console.error('invites', err)); // the link still works
+        }
+
         // Initialize the Durable Object with its config.
         const stub = env.TABLES.get(env.TABLES.idFromName(id));
         await stub.fetch('https://do/init', {
@@ -268,12 +281,45 @@ export default {
       const profileMatch = path.match(/^\/profile\/(0x[0-9a-fA-F]{40})$/);
       if (profileMatch && request.method === 'GET') {
         const row = await env.DB.prepare(
-          `SELECT address, handle, avatar, bankroll, net_profit AS netProfit,
+          `SELECT address, handle, handle_pick AS handlePick, avatar, bankroll, net_profit AS netProfit,
                   hands_played AS handsPlayed, hands_won AS handsWon,
                   biggest_pot AS biggestPot, last_claim AS lastClaim
            FROM players WHERE address = ?`,
         ).bind(profileMatch[1].toLowerCase()).first();
         return json({ profile: row ?? null });
+      }
+
+      /* ---------------- Names & invites ---------------- */
+
+      if (path === '/handle' && request.method === 'POST') {
+        // The pick follows the wallet to every device. Verified on-chain here,
+        // same as a table join: a name you don't own is refused, not stored.
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+        const body = (await request.json().catch(() => ({}))) as { name?: unknown };
+        const checked = await checkHandle(address, typeof body.name === 'string' ? body.name : '', { mainnet: env.MAINNET_RPC });
+        if (checked.status === 'unavailable') return json({ error: 'Robinhood Chain didn’t answer — try again.' }, 503);
+        if (checked.status !== 'verified') return json({ error: 'That name isn’t owned by this wallet.' }, 400);
+        await env.DB.prepare(
+          `INSERT INTO players (address, handle, handle_pick, avatar, handle_checked, created_at) VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(address) DO UPDATE SET handle = excluded.handle, handle_pick = excluded.handle_pick,
+             avatar = CASE WHEN ? THEN excluded.avatar ELSE players.avatar END,
+             handle_checked = excluded.handle_checked`,
+        ).bind(address, checked.handle, checked.handle, checked.avatar, Date.now(), Date.now(), checked.avatarKnown ? 1 : 0).run();
+        return json({ handle: checked.handle });
+      }
+
+      if (path === '/invites' && request.method === 'GET') {
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+        const { results } = await env.DB.prepare(
+          `SELECT table_id AS id, name, host, small_blind AS smallBlind, space, created_at AS createdAt
+           FROM table_invites WHERE address = ? AND created_at > ?
+           ORDER BY created_at DESC LIMIT 20`,
+        ).bind(address, Date.now() - 24 * 3600_000).all<Record<string, unknown>>();
+        return json({
+          invites: results.map((r) => ({ ...r, space: r.space === 1, hosting: r.host === address })),
+        });
       }
 
       /* ---------------- Daily chips ---------------- */

@@ -643,6 +643,8 @@ export class TableDO implements DurableObject {
     this.spaceRoom = null;
     await this.env.DB.prepare('DELETE FROM tables WHERE id = ?')
       .bind(this.config.id).run().catch(() => { /* re-swept by the lobby */ });
+    await this.env.DB.prepare('DELETE FROM table_invites WHERE table_id = ?')
+      .bind(this.config.id).run().catch(() => { /* reads ignore day-old rows anyway */ });
     // Tell any remaining spectators, then close without triggering the
     // client's auto-reconnect (it skips reconnection on code 4000).
     for (const sock of this.sockets.keys()) {

@@ -17,6 +17,7 @@ import { SITE_URL } from '@/lib/seo';
 import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CreateTable } from '@/components/CreateTable';
+import { Invites } from '@/components/Invites';
 import { Ticker } from '@/components/Ticker';
 import { Faq } from '@/components/Faq';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
@@ -207,6 +208,8 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+
+        <Invites />
 
         <div className="mt-7 grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))]">
           {filtered.map((t) => (

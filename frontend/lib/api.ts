@@ -94,9 +94,29 @@ export const api = {
   profile: (address: string) => get<{ profile: PlayerProfile | null }>(`/profile/${address}`),
   claim: (auth: ApiAuth) =>
     post<{ claimed: number }>('/claim', auth),
+  /** Save which owned name to play under — follows the wallet to any device. */
+  saveHandle: (auth: ApiAuth, name: string) => post<{ handle: string }>('/handle', auth, { name }),
+  /** Private tables this wallet is on the guest list for (last 24h). */
+  invites: async (auth: ApiAuth): Promise<{ invites: Invite[] }> => {
+    const res = await fetch(`${WORKER_URL}/invites`, { headers: { Authorization: `Bearer ${auth.token}` } });
+    if (res.status === 401) clearSession(auth.address);
+    if (!res.ok) throw new Error(`invites failed: ${res.status}`);
+    return res.json();
+  },
   /** Space audio: SDP relayed to the Realtime SFU — see lib/space-audio.ts. */
   space: <T>(auth: ApiAuth, tableId: string, op: SpaceOp, body?: unknown) =>
     post<T>(`/table/${tableId}/space/${op}`, auth, body ?? {}),
 };
+
+export interface Invite {
+  id: string;
+  name: string;
+  host: string;
+  smallBlind: number;
+  space: boolean;
+  /** You created it. */
+  hosting: boolean;
+  createdAt: number;
+}
 
 export type SpaceOp = 'connect' | 'publish' | 'pull' | 'renegotiate' | 'close';

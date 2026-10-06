@@ -71,8 +71,10 @@ const toNode = (tokenId: bigint) =>
   `0x${tokenId.toString(16).padStart(64, '0')}` as `0x${string}`;
 
 /**
- * Every hoodfi name the address currently owns, shortest label first so the
- * punchiest handle wins by default.
+ * Every hoodfi name the address currently owns, best default first: a direct
+ * name (michael.hoodfi.eth) before a deeper subname (nft.gm.hoodfi.eth), then
+ * the shortest. Sorting on length alone put nft.gm.hoodfi.eth (17 chars)
+ * ahead of michael.hoodfi.eth (18) — someone else's subtree as your name.
  */
 export async function hoodfiNamesFor(address: Address): Promise<HoodfiName[]> {
   // One query from block 0 started failing once the chain passed the RPC's
@@ -131,7 +133,14 @@ export async function hoodfiNamesFor(address: Address): Promise<HoodfiName[]> {
 
   return settled
     .filter((n): n is HoodfiName => n !== null)
-    .sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name));
+    .sort(compareNames);
+}
+
+const depth = (name: string) => name.split('.').length;
+
+/** Direct names first, then shortest, then A–Z. */
+export function compareNames(a: { name: string }, b: { name: string }): number {
+  return depth(a.name) - depth(b.name) || a.name.length - b.name.length || a.name.localeCompare(b.name);
 }
 
 export function useHoodfiNames(address: Address | undefined) {
