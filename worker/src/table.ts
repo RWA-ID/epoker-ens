@@ -20,6 +20,7 @@ import { settlePots, Contributor } from './poker/pots';
 import type { Env } from './env';
 import { sanitizeChat } from './chat';
 import { cleanAvatar, checkHandle, type VerifiedHandle } from './handle';
+import { Space, SpaceError, realtimeSfu, type Sfu } from './space';
 
 /** How long a table may sit empty before it is closed and delisted. */
 const EMPTY_TABLE_CLOSE_MS = 60_000;
@@ -38,6 +39,13 @@ export const SOCKET_LIMITS = {
   /** Chat lines. Over it the line is dropped with a notice. */
   chat: { max: 5, windowMs: 10_000 },
 };
+/** Builds the Space's SFU client. Swapped for a fake by the tests. */
+export const spaceSfu = {
+  make: (env: Env): Sfu | null =>
+    env.SFU_APP_ID && env.SFU_APP_SECRET ? realtimeSfu(env.SFU_APP_ID, env.SFU_APP_SECRET) : null,
+};
+/** Largest SDP-carrying request body worth reading. */
+const MAX_SPACE_BODY = 32_000;
 /** Hand log lines kept in memory and replayed to a new connection. */
 const LOG_KEEP = 80;
 const LOG_REPLAY = 40;
@@ -99,6 +107,10 @@ interface TableConfig {
   whitelist?: WhitelistEntry[];
   /** Practice table: bots fill seats, free stacks, nothing persisted. */
   practice?: boolean;
+  /** Creator's address. Absent on legacy tables and the practice table. */
+  host?: string;
+  /** Created with a voice Space (needs `host`). */
+  space?: boolean;
 }
 
 export class TableDO implements DurableObject {
@@ -127,6 +139,8 @@ export class TableDO implements DurableObject {
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   /** Dropped players still holding their seat, by address. */
   private graceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** The voice Space, built on first use for tables created with one. */
+  private spaceRoom: Space | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -169,6 +183,27 @@ export class TableDO implements DurableObject {
     // Read-only snapshot for the lobby / SEO-less previews.
     if (url.pathname.endsWith('/state')) {
       return Response.json(this.buildView(null));
+    }
+
+    // Space audio: SDP offers and answers relayed to the Realtime SFU. The
+    // router has verified the caller and set `address`, as for sockets.
+    const spaceOp = url.pathname.match(/\/space\/(connect|publish|pull|renegotiate|close)$/)?.[1];
+    if (spaceOp && request.method === 'POST') {
+      const space = this.space;
+      if (!space) return Response.json({ error: 'This table has no Space.' }, { status: 404 });
+      const address = (url.searchParams.get('address') ?? '').toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(address)) return Response.json({ error: 'bad address' }, { status: 400 });
+      const text = await request.text();
+      if (text.length > MAX_SPACE_BODY) return Response.json({ error: 'too large' }, { status: 413 });
+      let body: Record<string, unknown> = {};
+      try { body = text ? JSON.parse(text) : {}; } catch { /* treated as empty */ }
+      try {
+        return Response.json(await space.audioRequest(address, spaceOp, body ?? {}));
+      } catch (err) {
+        if (err instanceof SpaceError) return Response.json({ error: err.message }, { status: err.status });
+        console.error('space', spaceOp, err);
+        return Response.json({ error: 'The audio server didn’t answer — try again.' }, { status: 502 });
+      }
     }
 
     // WebSocket upgrade. The router has already verified the wallet
@@ -375,12 +410,47 @@ export class TableDO implements DurableObject {
         for (const sock of this.sockets.keys()) this.send(sock, { type: 'chat', message });
         return;
       }
+      default: {
+        if (typeof msg.type === 'string' && msg.type.startsWith('space:')) {
+          const space = this.space;
+          if (!space) return this.send(ws, { type: 'error', error: 'This table has no Space.' });
+          const err = space.command(session.address, msg);
+          if (err) this.send(ws, { type: 'error', error: err });
+        }
+      }
     }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Space (voice) — the logic lives in src/space.ts                    */
+  /* ------------------------------------------------------------------ */
+
+  private get space(): Space | null {
+    const cfg = this.config;
+    if (!cfg?.space || !cfg.host || cfg.practice) return null;
+    this.spaceRoom ??= new Space({
+      hostAddress: cfg.host,
+      canListen: (address) => this.isAllowedToSit(address),
+      isConnected: (address) => this.sessionFor(address) !== null,
+      identity: (address) => this.sessionFor(address),
+      broadcast: () => this.broadcast(),
+      notify: (address, text) => {
+        for (const [sock, s] of this.sockets) if (s.address === address) this.send(sock, { type: 'notice', text });
+      },
+    }, spaceSfu.make(this.env));
+    return this.spaceRoom;
+  }
+
+  private sessionFor(address: string): Session | null {
+    for (const s of this.sockets.values()) if (s.address === address) return s;
+    return null;
   }
 
   private onDisconnect(ws: WebSocket, session: Session) {
     if (this.sockets.get(ws) !== session) return; // stale socket already replaced
     this.sockets.delete(ws);
+    // Their browser's audio connection dies with the page; drop it here too.
+    this.spaceRoom?.disconnect(session.address);
     const player = this.players.get(session.address);
     if (!player) return;
     player.connected = false;
@@ -563,6 +633,14 @@ export class TableDO implements DurableObject {
   /** Alarm = the empty-table grace window elapsed. Close the table for good. */
   async alarm() {
     if (!this.config || this.humanCount() > 0) return;
+    // A live Space keeps an empty felt open; the Space ends on its own rules
+    // (host gone, empty stage), and the next check closes the table then.
+    if (this.spaceRoom?.isLive && this.sockets.size > 0) {
+      await this.state.storage.setAlarm(Date.now() + EMPTY_TABLE_CLOSE_MS).catch(() => {});
+      return;
+    }
+    await this.spaceRoom?.end('Table closed.');
+    this.spaceRoom = null;
     await this.env.DB.prepare('DELETE FROM tables WHERE id = ?')
       .bind(this.config.id).run().catch(() => { /* re-swept by the lobby */ });
     // Tell any remaining spectators, then close without triggering the
@@ -1135,6 +1213,7 @@ export class TableDO implements DurableObject {
       canSit: forAddress ? this.isAllowedToSit(forAddress) : !cfg.isPrivate,
       whitelist: cfg.isPrivate ? cfg.whitelist : undefined,
       practice: !!cfg.practice,
+      space: this.space?.view(forAddress),
     };
   }
 

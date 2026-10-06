@@ -10,6 +10,8 @@
  *                                only whitelisted addresses may sit.
  *   GET  /table/:id/state        read-only snapshot
  *   GET  /table/:id/ws           WebSocket upgrade (auth via query params)
+ *   POST /table/:id/space/:op    Space audio: connect | publish | pull | renegotiate | close
+ *                                (auth) — SDP relayed to the Realtime SFU, see src/space.ts
  *   GET  /leaderboard            top players by net play chips
  *   GET  /profile/:address       one player's stats + bankroll
  *   POST /claim                  daily free chips (auth)
@@ -154,6 +156,7 @@ export default {
           isPrivate?: boolean;
           maxPlayers?: number;
           whitelist?: { address?: string; handle?: string | null }[];
+          space?: boolean;
         };
         const name = String(body.name ?? '').slice(0, 40).trim() || 'Hoodpoker Table';
         const smallBlind = [5, 10, 25, 50].includes(Number(body.smallBlind)) ? Number(body.smallBlind) : 10;
@@ -190,12 +193,34 @@ export default {
         const stub = env.TABLES.get(env.TABLES.idFromName(id));
         await stub.fetch('https://do/init', {
           method: 'POST',
-          body: JSON.stringify({ id, name, smallBlind, isPrivate, maxPlayers, whitelist }),
+          body: JSON.stringify({
+            id, name, smallBlind, isPrivate, maxPlayers, whitelist,
+            host: address, space: body.space === true,
+          }),
         });
-        return json({ id, name, smallBlind, isPrivate });
+        return json({ id, name, smallBlind, isPrivate, space: body.space === true });
       }
 
       /* ---------------- Table (Durable Object) ---------------- */
+
+      // Space audio (SDP relay to the Realtime SFU). Same rule as sockets:
+      // the DO trusts `address`, so it is set here from the verified token.
+      const spaceMatch = path.match(/^\/table\/([a-zA-Z0-9-]+)\/space\/(connect|publish|pull|renegotiate|close)$/);
+      if (spaceMatch && request.method === 'POST') {
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+        if (!(await underLimit(env.SOCKET_LIMITER, `space:${address}`))) return json({ error: 'slow down' }, 429);
+        const [, id, op] = spaceMatch;
+        const stub = env.TABLES.get(env.TABLES.idFromName(id));
+        const res = await stub.fetch(`https://do/space/${op}?address=${address}`, {
+          method: 'POST',
+          body: await request.text(),
+        });
+        return new Response(res.body, {
+          status: res.status,
+          headers: { 'Content-Type': 'application/json', ...cors },
+        });
+      }
 
       const tableMatch = path.match(/^\/table\/([a-zA-Z0-9-]+)\/(ws|state)$/);
       if (tableMatch) {

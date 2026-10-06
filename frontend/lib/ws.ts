@@ -41,6 +41,8 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
   const [log, setLog] = useState<HandLogEntry[]>([]);
   const [lastResult, setLastResult] = useState<HandResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** A one-off notice for you, e.g. "The host muted you". */
+  const [notice, setNotice] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -149,6 +151,9 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
           case 'error':
             setError(msg.error);
             break;
+          case 'notice':
+            setNotice(msg.text);
+            break;
         }
       };
 
@@ -222,6 +227,8 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
     error,
     connected,
     clearError: () => setError(null),
+    notice,
+    clearNotice: () => setNotice(null),
     sit: (seat: number) => sendMsg({ type: 'sit', seat }),
     leave: () => {
       wantSeat.current = null;
@@ -232,5 +239,7 @@ export function useTableSocket(tableId: string | null, identity: Identity | null
     },
     act: (action: ActionType, amount?: number) => sendMsg({ type: 'action', action, amount }),
     say: (text: string) => sendMsg({ type: 'chat', text }),
+    /** Space role commands: raise a hand, invite, mute… */
+    spaceCmd: (msg: Extract<ClientMessage, { type: `space:${string}` }>) => sendMsg(msg),
   };
 }

@@ -67,6 +67,52 @@ export interface TableView {
   whitelist?: WhitelistEntry[];
   /** Practice table: bots fill empty seats, no bankroll or leaderboard. */
   practice?: boolean;
+  /** The table's voice Space — only on tables created with one. */
+  space?: SpaceView;
+}
+
+/* ---------- Spaces (voice rooms on a table — see worker/src/space.ts) ---------- */
+
+export type SpaceRole = 'host' | 'cohost' | 'speaker' | 'listener';
+
+export interface SpaceMember {
+  address: string;
+  handle: string | null;
+  avatar: string | null;
+  role: SpaceRole;
+  /** Holds an audio connection right now. */
+  inAudio: boolean;
+  /** Publishing a mic track (may still be self-muted). */
+  speaking: boolean;
+  /** Self-muted, host-muted, or simply not publishing. */
+  muted: boolean;
+}
+
+/** A live speaker track to pull from the SFU. */
+export interface SpaceTrack {
+  address: string;
+  sessionId: string;
+  trackName: string;
+}
+
+export interface SpaceView {
+  /** The worker has SFU credentials. False = show the Space, but it can't start. */
+  enabled: boolean;
+  live: boolean;
+  startedAt: number | null;
+  host: string;
+  /** Your role, or null when signed out. */
+  you: SpaceRole | null;
+  youInAudio: boolean;
+  handRaised: boolean;
+  /** Private tables: only the guest list may listen. */
+  canJoin: boolean;
+  /** Host, co-hosts and speakers who are here. */
+  stage: SpaceMember[];
+  /** Raised hands, oldest first. */
+  hands: SpaceMember[];
+  listeners: number;
+  tracks: SpaceTrack[];
 }
 
 /** One invited player on a private table's guest list. */
@@ -98,7 +144,11 @@ export type ClientMessage =
   | { type: 'leave' }
   | { type: 'action'; action: ActionType; amount?: number }
   | { type: 'chat'; text: string }
-  | { type: 'ping' };
+  | { type: 'ping' }
+  | { type: 'space:start' | 'space:end' | 'space:raise' | 'space:lower' | 'space:hangup' }
+  | { type: 'space:invite' | 'space:remove' | 'space:mute'; address: string }
+  | { type: 'space:cohost'; address: string; on: boolean }
+  | { type: 'space:selfmute'; muted: boolean };
 
 /* ---------- Server → Client ---------- */
 
@@ -121,6 +171,7 @@ export type ServerMessage =
   | { type: 'handResult'; winners: HandResultShare[]; board: Card[] }
   | { type: 'log'; entry: HandLogEntry }
   | { type: 'error'; error: string }
+  | { type: 'notice'; text: string }
   | { type: 'pong' };
 
 /* ---------- Constants ---------- */

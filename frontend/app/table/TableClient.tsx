@@ -30,6 +30,8 @@ import { ActionBar } from '@/components/ActionBar';
 import { Boombox } from '@/components/Boombox';
 import { stopMusic, useMusic } from '@/lib/music';
 import { TableDrawer, TablePanel, type PanelTab } from '@/components/TablePanel';
+import { SpacePanel } from '@/components/SpacePanel';
+import { useSpace } from '@/lib/useSpace';
 import { ChatIcon, CollapseIcon, ExpandIcon, LinkIcon, RotateIcon, SoundIcon } from '@/components/TableIcons';
 import {
   TILT_QUERY, useMediaQuery, requestNativeFullscreen, exitNativeFullscreen,
@@ -171,23 +173,27 @@ function TableInner() {
     );
   }
 
-  return <TableScreen table={table} state={state} you={identity?.address} />;
+  return <TableScreen table={table} state={state} you={identity?.address} token={identity?.token} />;
 }
 
 /** Everything the socket drives — rendered with a live table, or a mock in tests. */
 export type TableConnection = Pick<
   ReturnType<typeof useTableSocket>,
   'chat' | 'log' | 'lastResult' | 'error' | 'connected' | 'clearError' | 'sit' | 'leave' | 'act' | 'say'
+  | 'notice' | 'clearNotice' | 'spaceCmd'
 >;
 
 export function TableScreen({
   table,
   state,
   you,
+  token,
 }: {
   table: TableConnection;
   state: TableView;
   you: string | undefined;
+  /** Session token — the Space's audio requests are plain HTTP. */
+  token?: string;
 }) {
   const [muted, setMutedState] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -197,6 +203,8 @@ export function TableScreen({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
   const music = useMusic();
+  const spaceAuth = useMemo(() => (you && token ? { address: you, token } : undefined), [you, token]);
+  const space = useSpace(state.id, spaceAuth, state.space, table.spaceCmd);
   // Chat replayed on connect is history, not news — only later lines badge.
   const [chatSeenTs, setChatSeenTs] = useState(() => Date.now());
 
@@ -261,6 +269,11 @@ export function TableScreen({
     const t = setTimeout(table.clearError, 5000);
     return () => clearTimeout(t);
   }, [table.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!table.notice) return;
+    const t = setTimeout(table.clearNotice, 5000);
+    return () => clearTimeout(t);
+  }, [table.notice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const docked = desktop && !layer;
   // Desktop full screen has room beside a 3:2 felt, so the chat lives in that
@@ -307,8 +320,19 @@ export function TableScreen({
       you={you}
       onClose={onClose}
       className={onClose ? 'h-full' : 'absolute inset-0'}
+      spaceLive={state.space?.live}
+      space={
+        state.space && (
+          <SpacePanel view={state.space} you={you} controls={space} onCmd={table.spaceCmd} />
+        )
+      }
     />
   );
+
+  const openSpace = () => {
+    setPanelTab('space');
+    if (!docked && !sideDock) setDrawerOpen(true);
+  };
 
   /* ---------- Pieces ---------- */
 
@@ -387,6 +411,12 @@ export function TableScreen({
       <div className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-16px)] flex-wrap gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em] sm:left-3 sm:top-2.5 sm:text-[9.5px]">
         {state.practice && <FeltChip>Practice · vs bots</FeltChip>}
         {state.isPrivate && <FeltChip>Private</FeltChip>}
+        {state.space?.live && (
+          <FeltChip onClick={openSpace} pressed={space.status === 'on'}>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-acid" />
+            {space.status === 'on' ? 'In Space' : 'Space live'} · {state.space.stage.length + state.space.listeners}
+          </FeltChip>
+        )}
         <FeltChip onClick={toggleSound} pressed={!muted}>
           <SoundIcon muted={muted} size={11} />
           {muted ? 'Sounds off' : 'Sounds on'}
@@ -412,6 +442,15 @@ export function TableScreen({
           className="absolute left-1/2 top-[12%] z-30 max-w-[80%] -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-950/95 px-3 py-1.5 text-center font-mono text-[11px] text-red-200 shadow-lg sm:text-[12px]"
         >
           {table.error}
+        </div>
+      )}
+
+      {table.notice && !table.error && (
+        <div
+          role="status"
+          className="absolute left-1/2 top-[12%] z-30 max-w-[80%] -translate-x-1/2 rounded-lg border border-acid/40 bg-night-950/95 px-3 py-1.5 text-center font-mono text-[11px] text-acid shadow-lg sm:text-[12px]"
+        >
+          {table.notice}
         </div>
       )}
 

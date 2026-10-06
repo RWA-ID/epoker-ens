@@ -159,6 +159,7 @@ export function CreateTable({
   const [smallBlind, setSmallBlind] = useState(10);
   const [isPrivate, setIsPrivate] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(6);
+  const [withSpace, setWithSpace] = useState(false);
   const [guestInput, setGuestInput] = useState('');
   const [guests, setGuests] = useState<ResolvedGuest[]>([]);
   const [preview, setPreview] = useState<Preview>({ status: 'idle' });
@@ -244,6 +245,7 @@ export function CreateTable({
           name: tableName || suggestion,
           smallBlind,
           isPrivate,
+          space: withSpace,
           maxPlayers: isPrivate ? maxPlayers : undefined,
           whitelist: isPrivate
             ? guests.map(({ address, handle }) => ({ address, handle }))
@@ -356,6 +358,30 @@ export function CreateTable({
                   key={String(opt.value)}
                   active={isPrivate === opt.value}
                   onClick={() => setIsPrivate(opt.value)}
+                  className="px-4 py-4 text-left"
+                >
+                  <span className="hp-display hp-w85 block text-[20px]">{opt.label}</span>
+                  <span className="mt-1 block text-[13.5px] text-faint">{opt.hint}</span>
+                </Choice>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label aside="You host — start it from the table">Voice</Label>
+            <div className="grid gap-2.5 xs:grid-cols-2">
+              {([
+                { value: false, label: 'Chat only', hint: 'Text chat at the table' },
+                {
+                  value: true,
+                  label: '🎙 With a Space',
+                  hint: isPrivate ? 'Live voice for your guest list' : 'Live voice — bring people up to speak',
+                },
+              ] as const).map((opt) => (
+                <Choice
+                  key={String(opt.value)}
+                  active={withSpace === opt.value}
+                  onClick={() => setWithSpace(opt.value)}
                   className="px-4 py-4 text-left"
                 >
                   <span className="hp-display hp-w85 block text-[20px]">{opt.label}</span>

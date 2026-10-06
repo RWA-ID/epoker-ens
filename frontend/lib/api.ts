@@ -11,6 +11,8 @@ export interface CreateTableOptions {
   isPrivate?: boolean;
   maxPlayers?: number;
   whitelist?: WhitelistEntry[];
+  /** Give the table a voice Space (the creator hosts it). */
+  space?: boolean;
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -92,4 +94,9 @@ export const api = {
   profile: (address: string) => get<{ profile: PlayerProfile | null }>(`/profile/${address}`),
   claim: (auth: ApiAuth) =>
     post<{ claimed: number }>('/claim', auth),
+  /** Space audio: SDP relayed to the Realtime SFU — see lib/space-audio.ts. */
+  space: <T>(auth: ApiAuth, tableId: string, op: SpaceOp, body?: unknown) =>
+    post<T>(`/table/${tableId}/space/${op}`, auth, body ?? {}),
 };
+
+export type SpaceOp = 'connect' | 'publish' | 'pull' | 'renegotiate' | 'close';

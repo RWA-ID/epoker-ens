@@ -9,7 +9,9 @@ import { cn } from '@/lib/utils';
 import { ChatPanel } from './ChatPanel';
 import { HandLog } from './HandLog';
 
-export type PanelTab = 'chat' | 'log';
+export type PanelTab = 'chat' | 'log' | 'space';
+
+const TAB_LABEL: Record<PanelTab, string> = { chat: 'Chat', log: 'Hand log', space: 'Space' };
 
 export function TablePanel({
   tab,
@@ -20,6 +22,8 @@ export function TablePanel({
   you,
   onClose,
   className,
+  space,
+  spaceLive,
 }: {
   tab: PanelTab;
   onTab: (tab: PanelTab) => void;
@@ -30,7 +34,12 @@ export function TablePanel({
   /** Drawer only: shows a close button. */
   onClose?: () => void;
   className?: string;
+  /** The Space tab's content — only on tables with a Space. */
+  space?: React.ReactNode;
+  /** Shows a live dot on the tab. */
+  spaceLive?: boolean;
 }) {
+  const tabs: PanelTab[] = space ? ['chat', 'space', 'log'] : ['chat', 'log'];
   return (
     <div
       className={cn(
@@ -39,7 +48,7 @@ export function TablePanel({
       )}
     >
       <div className="flex shrink-0 border-b border-cream/10" role="tablist">
-        {(['chat', 'log'] as const).map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             role="tab"
@@ -50,7 +59,10 @@ export function TablePanel({
               tab === t ? 'text-acid shadow-[inset_0_-2px_0_#ccff00]' : 'text-dim hover:text-cream',
             )}
           >
-            {t === 'chat' ? 'Chat' : 'Hand log'}
+            {TAB_LABEL[t]}
+            {t === 'space' && spaceLive && (
+              <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-acid align-middle" />
+            )}
           </button>
         ))}
         {onClose && (
@@ -65,6 +77,8 @@ export function TablePanel({
       </div>
       {tab === 'chat' ? (
         <ChatPanel messages={chat} onSend={onSend} you={you} />
+      ) : tab === 'space' && space ? (
+        space
       ) : (
         <HandLog entries={log} you={you} />
       )}
@@ -97,7 +111,7 @@ export function TableDrawer({
       />
       <div
         role="dialog"
-        aria-label="Table chat and hand log"
+        aria-label="Table chat, Space and hand log"
         className={cn(
           'absolute inset-x-0 bottom-0 mx-auto flex h-[min(72%,560px)] max-w-xl flex-col px-2 pb-[max(8px,env(safe-area-inset-bottom))] transition-transform duration-200 ease-out',
           open ? 'translate-y-0' : 'translate-y-full',

@@ -23,6 +23,10 @@ export interface Env {
   WHITELIST_OPEN?: string;
   /** Turnstile secret for whitelist sign-ups — `wrangler secret put TURNSTILE_SECRET`. Unset = refuse all. */
   TURNSTILE_SECRET?: string;
+  /** Cloudflare Realtime SFU app for Spaces (voice). Both unset = Spaces can't start. */
+  SFU_APP_ID?: string;
+  /** `wrangler secret put SFU_APP_SECRET` — never shipped to a browser. */
+  SFU_APP_SECRET?: string;
   /** Mainnet RPC for verifying ENS handles and avatars. */
   MAINNET_RPC?: string;
   /** Optional rate limiters — absent in tests and `wrangler dev` is fine. */
