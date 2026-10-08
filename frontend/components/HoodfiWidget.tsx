@@ -87,11 +87,93 @@ function writePending(v: { label: string; owner: string } | null) {
   }
 }
 
+/** Does `owner` hold `label`.hoodfi.eth? ownerOf reverts for a name never minted, which is a no. */
+async function ownsName(label: string, owner: string): Promise<boolean> {
+  try {
+    const base = await reader.readContract({ address: REGISTRY, abi: registryAbi, functionName: 'baseNode' });
+    const node = await reader.readContract({
+      address: REGISTRY,
+      abi: registryAbi,
+      functionName: 'makeNode',
+      args: [base, label],
+    });
+    const holder = await reader.readContract({
+      address: REGISTRY,
+      abi: registryAbi,
+      functionName: 'ownerOf',
+      args: [BigInt(node)],
+    });
+    return holder.toLowerCase() === owner.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A wallet step that settles from the chain, not from the wallet's reply.
+ *
+ * A WalletConnect reply can be lost on the relay after the wallet has already signed and
+ * broadcast: `writeContractAsync` then never settles, and neither does anything awaiting
+ * it. That left the card on "Confirm in wallet…" forever after a real, mined approval.
+ * So the send races a poll of the state the step is meant to produce (an allowance, an
+ * owner) and whichever proves it first wins. A rejection in the wallet still rejects.
+ *
+ * Running out of time is not a failure — the transaction may still land — so the error
+ * says so, rather than inviting someone to pay twice.
+ */
+const STEP_TIMEOUT_MS = 180_000;
+const POLL_MS = 3_000;
+
+function settleFromChain(
+  send: () => Promise<`0x${string}`>,
+  done: () => Promise<boolean>,
+  slowMessage: string,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let over = false;
+    const finish = (err?: unknown) => {
+      if (over) return;
+      over = true;
+      clearInterval(poll);
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve();
+    };
+
+    const check = () => {
+      done().then((ok) => ok && finish(), () => {});
+    };
+    const poll = setInterval(check, POLL_MS);
+    const timer = setTimeout(() => finish(new Error(slowMessage)), STEP_TIMEOUT_MS);
+
+    send().then(
+      async (hash) => {
+        try {
+          const receipt = await reader.waitForTransactionReceipt({ hash, timeout: STEP_TIMEOUT_MS });
+          // A receipt is not a success: `status` is the only thing that says it did not revert.
+          if (receipt.status !== 'success') finish(new Error('The transaction reverted'));
+          else check();
+        } catch {
+          // The receipt wait gave out; the poll is still running and decides.
+        }
+      },
+      (err) => finish(err),
+    );
+  });
+}
+
+type Step = 'approve' | 'register' | null;
+
 export function HoodfiWidget() {
   const slot = useRef<HTMLDivElement>(null);
   const handle = useRef<Handle | null>(null);
   const [failed, setFailed] = useState(false);
   const [claimed, setClaimed] = useState<string | null>(null);
+  // Which of the two wallet prompts we are on, shown under the card. The widget's own
+  // button just says "Confirm in wallet…" for the whole flow, and a second prompt nobody
+  // was told about reads as a repeat — or as the first one having failed.
+  const [step, setStep] = useState<Step>(null);
+  const [needsApproval, setNeedsApproval] = useState(false);
 
   const { address, source, isConnected } = useWallet();
   const connect = useConnect();
@@ -126,48 +208,67 @@ export function HoodfiWidget() {
       });
       if (!sellable) throw new Error('That name is no longer available');
 
-      // Approve only when short. An allowance already covering the price means a second
-      // prompt for nothing, and two wallet popups is where people give up.
-      const allowance = await reader.readContract({
-        address: USDG,
-        abi: erc20Abi,
-        functionName: 'allowance',
-        args: [address, ROUTER],
-      });
-      if (allowance < price) {
-        const approveHash = await writeContractAsync({
+      const covered = async () =>
+        (await reader.readContract({
           address: USDG,
           abi: erc20Abi,
-          functionName: 'approve',
-          args: [ROUTER, price],
-          chainId: robinhood.id,
-        });
-        // Wait for it: registerViaPartner pulls the USDG, so sending it against an
-        // unmined approval just reverts.
-        const approved = await reader.waitForTransactionReceipt({ hash: approveHash });
-        if (approved.status !== 'success') throw new Error('The approval did not go through');
-      }
+          functionName: 'allowance',
+          args: [address, ROUTER],
+        })) >= price;
 
-      // Written down BEFORE the wallet opens. Everything after this point can be lost to
-      // the OS discarding a backgrounded page; this is what lets the return trip recover.
-      writePending({ label, owner: address });
+      try {
+        // Approve only when short. An allowance already covering the price means a second
+        // prompt for nothing, and two wallet popups is where people give up. It is also
+        // what makes a retry after a stuck approval a single prompt.
+        const approve = !(await covered());
+        setNeedsApproval(approve);
+        if (approve) {
+          setStep('approve');
+          // registerViaPartner pulls the USDG, so it must not be sent before the
+          // allowance is on-chain — settled means read back, not merely signed.
+          await settleFromChain(
+            () =>
+              writeContractAsync({
+                address: USDG,
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [ROUTER, price],
+                chainId: robinhood.id,
+              }),
+            covered,
+            'The USDG approval has not confirmed yet. It may still land — try again in a minute and it will skip straight to the registration.',
+          );
+        }
 
-      const hash = await writeContractAsync({
-        address: ROUTER,
-        abi: routerAbi,
-        functionName: 'registerViaPartner',
-        args: [label, PARTNER],
-        chainId: robinhood.id,
-      });
-      // A receipt is not a success. `status` is the only thing that says the call did not
-      // revert, and waitForTransactionReceipt resolves happily either way.
-      const receipt = await reader.waitForTransactionReceipt({ hash });
-      if (receipt.status !== 'success') {
+        // Written down BEFORE the wallet opens. Everything after this point can be lost to
+        // the OS discarding a backgrounded page; this is what lets the return trip recover.
+        writePending({ label, owner: address });
+        setStep('register');
+
+        try {
+          await settleFromChain(
+            () =>
+              writeContractAsync({
+                address: ROUTER,
+                abi: routerAbi,
+                functionName: 'registerViaPartner',
+                args: [label, PARTNER],
+                chainId: robinhood.id,
+              }),
+            () => ownsName(label, address),
+            `Still waiting on Robinhood Chain. ${label}.hoodfi.eth may still be on its way — check back in a minute before trying again.`,
+          );
+        } catch (err) {
+          // Keep the pending record on a timeout: resume() will notice if it lands. Only a
+          // rejection or a revert means nothing is coming.
+          if (!(err instanceof Error && err.message.startsWith('Still waiting'))) writePending(null);
+          throw err;
+        }
         writePending(null);
-        throw new Error('The registration reverted');
+        setClaimed(label);
+      } finally {
+        setStep(null);
       }
-      writePending(null);
-      setClaimed(label);
     },
     [address, writeContractAsync],
   );
@@ -181,26 +282,10 @@ export function HoodfiWidget() {
   const resume = useCallback(async () => {
     const pending = readPending();
     if (!pending) return;
-    try {
-      const node = await reader.readContract({
-        address: REGISTRY,
-        abi: registryAbi,
-        functionName: 'makeNode',
-        args: [await reader.readContract({ address: REGISTRY, abi: registryAbi, functionName: 'baseNode' }), pending.label],
-      });
-      const owner = await reader.readContract({
-        address: REGISTRY,
-        abi: registryAbi,
-        functionName: 'ownerOf',
-        args: [BigInt(node)],
-      });
-      if (owner.toLowerCase() === pending.owner.toLowerCase()) {
-        writePending(null);
-        setClaimed(pending.label);
-      }
-    } catch {
-      // ownerOf reverts for a name that was never minted — the registration did not land,
-      // so leave the card as it is rather than claiming something that is not true.
+    // Not owned yet leaves the card as it is rather than claiming something untrue.
+    if (await ownsName(pending.label, pending.owner)) {
+      writePending(null);
+      setClaimed(pending.label);
     }
   }, []);
 
@@ -310,6 +395,18 @@ export function HoodfiWidget() {
   return (
     <div>
       <div ref={slot} />
+      {step && (
+        <p className="mt-3 text-[13.5px] leading-[1.6] text-muted" aria-live="polite">
+          {needsApproval && (
+            <span className="font-mono text-[12.5px]">
+              Step {step === 'approve' ? 1 : 2} of 2 ·{' '}
+            </span>
+          )}
+          {step === 'approve'
+            ? 'Approve USDG in your wallet — this lets the name be paid for.'
+            : 'Confirm the registration in your wallet.'}
+        </p>
+      )}
       {isConnected && !canTransact && (
         // Passkey players: the embedded wallet cannot sign this here, so say so rather
         // than leave a dead button.
