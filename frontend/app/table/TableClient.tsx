@@ -36,6 +36,7 @@ import { ChatIcon, CollapseIcon, ExpandIcon, LinkIcon, RotateIcon, SoundIcon } f
 import {
   TILT_QUERY, useMediaQuery, requestNativeFullscreen, exitNativeFullscreen,
   lockLandscape, unlockOrientation, readRotatePref, writeRotatePref, nextRotation, type Rotation,
+  isWalletBrowser, nativeBrowserName, readBrowserHintOff, writeBrowserHintOff,
 } from '@/lib/tilt';
 
 const STAGE_LABEL: Record<string, string> = {
@@ -202,6 +203,7 @@ export function TableScreen({
   const [panelTab, setPanelTab] = useState<PanelTab>('chat');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
+  const [browserHint, setBrowserHint] = useState(false);
   const music = useMusic();
   const spaceAuth = useMemo(() => (you && token ? { address: you, token } : undefined), [you, token]);
   const space = useSpace(state.id, spaceAuth, state.space, table.spaceCmd);
@@ -251,6 +253,7 @@ export function TableScreen({
   const toggleFull = async () => {
     if (full) {
       setFull(false);
+      setBrowserHint(false);
       nativeFull.current = false;
       unlockOrientation();
       await exitNativeFullscreen();
@@ -260,7 +263,10 @@ export function TableScreen({
     nativeFull.current = await requestNativeFullscreen();
     // Android turns the real screen; everywhere else the CSS rotation
     // (`rotation` above) takes over because the page stays portrait.
-    if (nativeFull.current && touch) await lockLandscape();
+    const locked = nativeFull.current && touch && (await lockLandscape());
+    // A wallet browser stays upright with its own toolbar showing, so the
+    // rotated table is cramped. Point the player at the phone's own browser.
+    if (!locked && isWalletBrowser() && !readBrowserHintOff()) setBrowserHint(true);
   };
 
   // Auto-dismiss transient errors (illegal action, seat taken, …).
@@ -498,6 +504,12 @@ export function TableScreen({
             </div>
           </div>
           <TableDrawer open={drawerOpen} onClose={closeDrawer}>{panel(closeDrawer)}</TableDrawer>
+          {browserHint && (
+            <BrowserHint
+              onClose={() => setBrowserHint(false)}
+              onNever={() => { writeBrowserHintOff(); setBrowserHint(false); }}
+            />
+          )}
         </div>
       </div>
     );
@@ -560,6 +572,41 @@ function TableBackdrop({ inLayer = false }: { inLayer?: boolean }) {
         style={{ backgroundImage: "url('/table-live.jpg')" }}
       />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(5,5,5,0.2)_0%,rgba(5,5,5,0.85)_85%)]" />
+    </div>
+  );
+}
+
+/**
+ * Shown on entering full screen inside a wallet browser. It sits inside the
+ * rotated box, so it reads the same way up as the table. Copying the link is
+ * the dependable route out: neither iOS nor the wallets reliably honour a
+ * "open in Safari/Chrome" link.
+ */
+function BrowserHint({ onClose, onNever }: { onClose: () => void; onNever: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const browser = nativeBrowserName();
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+    } catch { /* clipboard blocked */ }
+  };
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-night-950/70 p-4 backdrop-blur-sm">
+      <div role="dialog" aria-label={`Open in ${browser} for tilt mode`} className="w-full max-w-[340px] rounded-card border border-acid/30 bg-night-900 p-4 shadow-[0_18px_44px_rgba(0,0,0,0.7)]">
+        <p className="hp-display hp-w85 text-[16px] text-cream">Want a bigger table?</p>
+        <p className="mt-2 text-[13px] leading-[1.55] text-muted">
+          Wallet browsers keep the screen upright and their toolbar in the way. Open this table in{' '}
+          <span className="text-cream">{browser}</span> and turn your phone sideways for the full tilt mode.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <Button className="flex-1" onClick={copy}>{copied ? 'Link copied!' : 'Copy table link'}</Button>
+          <Button variant="outline" onClick={onClose}>Play here</Button>
+        </div>
+        <button onClick={onNever} className="mt-3 w-full font-mono text-[10.5px] text-faint transition-colors hover:text-dim">
+          Don’t show this again
+        </button>
+      </div>
     </div>
   );
 }

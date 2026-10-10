@@ -164,6 +164,14 @@ export function Header() {
                       {address.toLowerCase()}
                     </p>
                   </div>
+                  <Link
+                    href="/profile/"
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="block w-full px-4 py-2.5 text-left font-mono text-[11.5px] text-cream transition-colors hover:bg-cream/5 hover:text-acid"
+                  >
+                    Profile &amp; daily chips
+                  </Link>
                   {source === 'passkey' ? (
                     <p className="px-4 py-2.5 font-mono text-[10.5px] text-faint">Signed in with a passkey</p>
                   ) : (
