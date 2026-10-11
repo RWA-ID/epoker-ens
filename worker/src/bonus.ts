@@ -66,8 +66,33 @@ export function isDirectHoodfiName(name: string): boolean {
   return /^[a-z0-9-]{1,63}\.hoodfi\.eth$/.test(name);
 }
 
-/** Did this wallet buy a name through the HoodPoker widget? */
+/**
+ * HoodFi's own gateway serves the partner's sales from its dedicated archive
+ * RPC. From a Worker, the public RPC's getLogs fails often enough that this is
+ * the first source; it's our infrastructure, and the rows are the same public
+ * PartnerRegistration logs.
+ */
+const SALES_URL = `https://ccip.hoodfi-mcp.com/partner/${PARTNER}/sales`;
+
+/**
+ * Did this wallet buy a name through the HoodPoker widget? Gateway first;
+ * if it doesn't list the wallet (its response is CDN-cached, so a sale from
+ * minutes ago may be missing) or doesn't answer, ask the chain directly.
+ */
 export async function boughtViaWidget(address: string): Promise<'yes' | 'no' | 'unavailable'> {
+  try {
+    const res = await fetch(SALES_URL, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const data = (await res.json()) as { sales?: { buyer?: string }[] };
+      if (data.sales?.some((s) => String(s.buyer).toLowerCase() === address)) return 'yes';
+    }
+  } catch (err) {
+    console.error('widget sales gateway failed', String(err).slice(0, 200));
+  }
+  return boughtViaWidgetOnChain(address);
+}
+
+async function boughtViaWidgetOnChain(address: string): Promise<'yes' | 'no' | 'unavailable'> {
   const client = createPublicClient({ chain: robinhood, transport: http() });
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
