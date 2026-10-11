@@ -33,7 +33,13 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
 
   const [claiming, setClaiming] = useState(false);
-  const [claimMsg, setClaimMsg] = useState<string | null>(null);
+  const [claimMsg, setClaimMsg] = useState<Msg | null>(null);
+  // Brief glow on the bankroll after a successful claim, so the number moving is noticed.
+  const [flash, setFlash] = useState(false);
+  const celebrate = () => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 2400);
+  };
 
   const { data } = useQuery({
     queryKey: ['profile', address],
@@ -49,7 +55,7 @@ export default function ProfilePage() {
     enabled: !!address,
   });
   const [bonusBusy, setBonusBusy] = useState<'weekly' | 'widget' | null>(null);
-  const [bonusMsg, setBonusMsg] = useState<string | null>(null);
+  const [bonusMsg, setBonusMsg] = useState<Msg | null>(null);
   // Direct names only: subnames don't earn the weekly bonus. The table name
   // goes first so that's the one the week is paid against.
   const directNames = hoodfiNames
@@ -66,11 +72,12 @@ export default function ProfilePage() {
       const res = kind === 'weekly'
         ? await api.claimWeekly({ address, token }, directNames)
         : await api.claimWidget({ address, token });
-      setBonusMsg(`+${formatChips(res.claimed)} chips claimed! 🎉`);
+      setBonusMsg({ ok: true, text: `+${formatChips(res.claimed)} chips added to your bankroll` });
+      celebrate();
       void queryClient.invalidateQueries({ queryKey: ['profile', address] });
       void queryClient.invalidateQueries({ queryKey: ['bonus', address] });
     } catch (err) {
-      setBonusMsg(err instanceof Error ? err.message : 'Claim failed');
+      setBonusMsg({ ok: false, text: err instanceof Error ? err.message : 'Claim failed' });
     } finally {
       setBonusBusy(null);
     }
@@ -83,10 +90,11 @@ export default function ProfilePage() {
     try {
       const { token } = await ensureAuth(address, signMessage);
       const res = await api.claim({ address, token });
-      setClaimMsg(`+${formatChips(res.claimed)} chips claimed! 🎉`);
+      setClaimMsg({ ok: true, text: `+${formatChips(res.claimed)} chips added to your bankroll` });
+      celebrate();
       void queryClient.invalidateQueries({ queryKey: ['profile', address] });
     } catch (err) {
-      setClaimMsg(err instanceof Error ? err.message : 'Claim failed');
+      setClaimMsg({ ok: false, text: err instanceof Error ? err.message : 'Claim failed' });
     } finally {
       setClaiming(false);
     }
@@ -144,7 +152,12 @@ export default function ProfilePage() {
         <Card className="border-acid-400/25">
           <CardContent className="p-7">
             <p className="text-[11px] uppercase tracking-[0.2em] text-dim">Bankroll</p>
-            <p className="text-acid mt-2 hp-display hp-w80 text-[52px] leading-none">
+            <p
+              className={cn(
+                'text-acid mt-2 hp-display hp-w80 text-[52px] leading-none transition-[text-shadow] duration-700',
+                flash && '[text-shadow:0_0_28px_rgba(204,255,0,0.75)]',
+              )}
+            >
               {profile ? formatChips(profile.bankroll) : '—'}
             </p>
             {!profile && (
@@ -159,7 +172,7 @@ export default function ProfilePage() {
                   ? 'Claim daily chips · +5,000'
                   : 'Daily chips already claimed'}
             </Button>
-            {claimMsg && <p className="mt-3 text-center text-xs text-muted">{claimMsg}</p>}
+            {claimMsg && <Notice msg={claimMsg} />}
             <p className="mt-3.5 text-center text-[11.5px] text-faint">
               Play chips have no cash value and can’t be bought, sold or withdrawn.
             </p>
@@ -222,7 +235,7 @@ export default function ProfilePage() {
                       : `Bought a name here? · +${formatChips(bonus.widget.amount)}`}
               </Button>
             </div>
-            {bonusMsg && <p className="mt-3 text-center text-xs text-muted">{bonusMsg}</p>}
+            {bonusMsg && <Notice msg={bonusMsg} />}
             <p className="mt-3.5 text-[11.5px] text-faint">
               The one-time {bonus ? formatChips(bonus.widget.amount) : '100,000'} goes to a wallet that
               registered a hoodfi.eth name through the widget on HoodPoker.
@@ -296,6 +309,26 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+type Msg = { ok: boolean; text: string };
+
+/** Claim result: a green banner for chips landed, red for a refusal — never mistakable. */
+function Notice({ msg }: { msg: Msg }) {
+  return (
+    <div
+      role={msg.ok ? 'status' : 'alert'}
+      className={cn(
+        'mt-4 flex items-center justify-center gap-2 rounded-btn border px-4 py-3 text-center text-[14px] font-semibold',
+        msg.ok
+          ? 'border-acid/50 bg-acid/[0.12] text-acid'
+          : 'border-red-400/40 bg-red-400/10 text-red-300',
+      )}
+    >
+      <span aria-hidden>{msg.ok ? '✓' : '!'}</span>
+      {msg.text}
     </div>
   );
 }
