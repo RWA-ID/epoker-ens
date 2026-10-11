@@ -10,7 +10,7 @@
  *              that missed it gets a live `balanceOf` only to word the reply.
  *   Whitelist  the worker's live counter, GET /whitelist?address= (no auth).
  *   HoodFi     a live `balanceOf` on the registry. That stage snapshots on
- *              October 13, so owning a name today is a promise to keep it.
+ *              October 14, so owning a name today is a promise to keep it.
  *
  * The Robinhood RPC refuses a share of calls, so a failed read says "couldn't
  * check" and never "no" — reading a throttle as "you hold none" is the same
@@ -102,8 +102,8 @@ async function checkAll(address: Address): Promise<Row[]> {
     names === null
       ? { stage: 'HoodFi name', tone: 'unknown', text: 'Couldn’t reach Robinhood Chain just now — that RPC drops calls. Try again.' }
       : names > 0
-        ? { stage: 'HoodFi name', tone: 'in', text: `Owns ${names === 1 ? 'a hoodfi.eth name' : `${fmt(names)} hoodfi.eth names`}. Keep one through the October 13 snapshot.` }
-        : { stage: 'HoodFi name', tone: 'out', text: 'No hoodfi.eth name. Mint one before October 13 to get in.' };
+        ? { stage: 'HoodFi name', tone: 'in', text: `Owns ${names === 1 ? 'a hoodfi.eth name' : `${fmt(names)} hoodfi.eth names`}. Keep one through the October 14 snapshot to mint two.` }
+        : { stage: 'HoodFi name', tone: 'out', text: 'No hoodfi.eth name. Mint one before October 14 to get in.' };
 
   return [ccff00, whitelist, hoodfi];
 }

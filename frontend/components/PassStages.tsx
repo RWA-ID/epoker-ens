@@ -8,7 +8,7 @@ export function MintStages() {
   return (
     <div className="mt-7">
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
-        Four stages · allowlists free · public {PUBLIC_PRICE_ETH} ETH · October 15
+        Four stages · allowlists free · public {PUBLIC_PRICE_ETH} ETH · from October 15, 5:30pm AST
       </p>
       <ol className="mt-3 grid gap-2">
         {MINT_STAGES.map((stage, i) => (
@@ -17,6 +17,7 @@ export function MintStages() {
             <p className="min-w-0 flex-1 text-[14.5px] leading-[1.5] text-cream">
               {stage.name}
               <span className="text-muted"> — {stage.who}</span>
+              <span className="mt-0.5 block font-mono text-[11px] text-faint">{stage.when}</span>
             </p>
             <span className="shrink-0 text-right font-mono text-[12px] tabular-nums leading-[1.5] text-acid">
               {stage.cap}
@@ -37,8 +38,8 @@ export function PassFineprint() {
         The allowlist stages are free, you pay only gas. The public price of {PUBLIC_PRICE_ETH} ETH
         goes to development, infrastructure and maintenance. The chip stack that comes with a pass is play
         money like every other chip: it can&rsquo;t be transferred between players, cashed out or
-        turned into a prize, and it&rsquo;s credited once per pass, so reselling one doesn&rsquo;t pay
-        out again. Cosmetics never touch a hand, and the leaderboard ranks profit per hand, so a
+        turned into a prize. A pass that changes hands brings its perks to the new wallet, but no
+        wallet collects the same pass&rsquo;s stack twice. Cosmetics never touch a hand, and the leaderboard ranks profit per hand, so a
         bigger stack can&rsquo;t buy rank.
       </p>
     </div>

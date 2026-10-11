@@ -8,7 +8,7 @@
  *
  * --ccff00-from  reuse a published CCFF00 cut instead of re-ranking. The cut
  *           was taken and published on 2026-10-02 (block 78244737); the final
- *           run on Oct 13 MUST pass this, or it redraws the list people were
+ *           run on Oct 14 MUST pass this, or it redraws the list people were
  *           already told they're on. Whitelist + HoodFi are still read live.
  *
  * Rules for the 3,333 CCFF00 spots (4,296-odd holders, so somebody misses out):
@@ -30,7 +30,7 @@
  *           in this file are kept; the 28 sign-ups from before then have no
  *           handle and are kept as they are. Without the flag nothing is
  *           filtered and the report says how many handles went unchecked —
- *           the final Oct 13 run should always pass it. whitelist-signups.csv
+ *           the final Oct 14 run should always pass it. whitelist-signups.csv
  *           (address, handle, kept) is written either way for a manual pass. Left-out CCFF00 holders keep their place; sign-ups past 2,222
  * are the waitlist that backfills the spots picked holders vacate.
  *
@@ -184,7 +184,8 @@ function handleOf(raw) {
   return /^[a-z0-9_]{1,15}$/.test(s) ? s : null;
 }
 
-const csv = (addresses) => [CSV_HEADER, ...addresses.map((a) => `${getAddress(a)},1,0`)].join('\n') + '\n';
+// Mint limit per wallet: 1 everywhere except HoodFi names, 2 (Hector, 2026-10-10).
+const csv = (addresses, limit = 1) => [CSV_HEADER, ...addresses.map((a) => `${getAddress(a)},${limit},0`)].join('\n') + '\n';
 
 // ---------------------------------------------------------------------------
 
@@ -246,7 +247,7 @@ if (!args.write) {
 const dir = join('snapshot-out', new Date().toISOString().replace(/[:.]/g, '-'));
 mkdirSync(dir, { recursive: true });
 writeFileSync(join(dir, 'ccff00.csv'), csv(ccPicked.map((r) => r.address)));
-writeFileSync(join(dir, 'hoodfi.csv'), csv(hfList));
+writeFileSync(join(dir, 'hoodfi.csv'), csv(hfList, 2));
 writeFileSync(join(dir, 'whitelist.csv'), csv(wlList));
 writeFileSync(join(dir, 'whitelist-signups.csv'),
   ['address,x_handle,kept', ...wlRows.map((r) => `${r.address},${r.handle ?? ''},${wlKept(r) ? 1 : 0}`)].join('\n') + '\n');

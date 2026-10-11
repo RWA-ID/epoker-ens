@@ -129,7 +129,7 @@ export default function TermsPage() {
         <List
           items={[
             'A pass unlocks the perks described on the House Pass page while we run HoodPoker. We may change, replace or retire a perk, and every perk ends if HoodPoker shuts down.',
-            'The chip stack that comes with a pass is credited once per pass, ever, not once per owner. It is play money under clause 6, with no cash value.',
+            'A pass pays chips every 12 hours, at its tier’s amount, to whichever wallet holds it, and a one-time chip stack to each wallet that holds it; a wallet never collects the same pass’s stack twice. These chips are play money under clause 6, with no cash value.',
             'A pass is not an investment. It carries no share of revenue or profit, no vote, no ownership of HoodPoker and no claim on anything. We make no promise about its resale value, and you should assume it may be worth nothing on resale.',
             'Mints are final. Gas and mint prices are not refundable, including for a failed or reverted transaction.',
             'Resales on secondary markets carry the creator earnings set on the collection, and happen between you and the buyer.',

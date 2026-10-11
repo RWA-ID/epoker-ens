@@ -1,7 +1,7 @@
 'use client';
 /**
  * Player profile: identity, chip bankroll, poker stats, daily chip claim,
- * and the handle picker for wallets holding more than one hoodfi name.
+ * the HoodFi bonuses (worker/src/bonus.ts), and the handle picker for wallets holding more than one hoodfi name.
  * Every number is live — stats come from D1.
  */
 import { useState } from 'react';
@@ -42,6 +42,39 @@ export default function ProfilePage() {
     refetchInterval: 15000,
   });
   const profile = data?.profile ?? null;
+
+  const { data: bonus } = useQuery({
+    queryKey: ['bonus', address],
+    queryFn: () => api.bonus(address!),
+    enabled: !!address,
+  });
+  const [bonusBusy, setBonusBusy] = useState<'weekly' | 'widget' | null>(null);
+  const [bonusMsg, setBonusMsg] = useState<string | null>(null);
+  // Direct names only: subnames don't earn the weekly bonus. The table name
+  // goes first so that's the one the week is paid against.
+  const directNames = hoodfiNames
+    .map((n) => n.name)
+    .filter((n) => /^[a-z0-9-]+\.hoodfi\.eth$/.test(n))
+    .sort((a, b) => Number(b === handle) - Number(a === handle));
+
+  const claimBonus = async (kind: 'weekly' | 'widget') => {
+    if (!address) return;
+    setBonusBusy(kind);
+    setBonusMsg(null);
+    try {
+      const { token } = await ensureAuth(address, signMessage);
+      const res = kind === 'weekly'
+        ? await api.claimWeekly({ address, token }, directNames)
+        : await api.claimWidget({ address, token });
+      setBonusMsg(`+${formatChips(res.claimed)} chips claimed! 🎉`);
+      void queryClient.invalidateQueries({ queryKey: ['profile', address] });
+      void queryClient.invalidateQueries({ queryKey: ['bonus', address] });
+    } catch (err) {
+      setBonusMsg(err instanceof Error ? err.message : 'Claim failed');
+    } finally {
+      setBonusBusy(null);
+    }
+  };
 
   const claim = async () => {
     if (!address) return;
@@ -147,6 +180,53 @@ export default function ProfilePage() {
               <Stat label="Hands won" value={profile ? `${formatChips(profile.handsWon)} · ${winRate}%` : '—'} />
               <Stat label="Biggest pot" value={profile ? formatChips(profile.biggestPot) : '—'} tone="text-acid" />
             </dl>
+          </CardContent>
+        </Card>
+
+        {/* HoodFi bonuses */}
+        <Card className="md:col-span-2">
+          <CardContent className="p-7">
+            <h3 className="hp-display hp-w85 text-xl text-cream">HoodFi bonuses</h3>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+              For hoodfi.eth name owners, House Pass or not. The weekly bonus resets every Friday at
+              midnight AST, and each name pays one wallet a week.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Button
+                onClick={() => claimBonus('weekly')}
+                disabled={!!bonusBusy || !bonus || bonus.weekly.claimed || directNames.length === 0}
+                className="w-full"
+              >
+                {bonusBusy === 'weekly'
+                  ? 'Claiming…'
+                  : !bonus
+                    ? 'Weekly bonus'
+                    : bonus.weekly.claimed
+                      ? `Claimed · next ${new Date(bonus.weekly.nextAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`
+                      : directNames.length === 0
+                        ? 'Weekly bonus needs a hoodfi.eth name'
+                        : `Claim weekly · +${formatChips(bonus.weekly.amount)}`}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => claimBonus('widget')}
+                disabled={!!bonusBusy || !bonus || bonus.widget.claimed}
+                className="w-full"
+              >
+                {bonusBusy === 'widget'
+                  ? 'Checking the chain…'
+                  : !bonus
+                    ? 'Widget bonus'
+                    : bonus.widget.claimed
+                      ? 'Widget bonus claimed'
+                      : `Bought a name here? · +${formatChips(bonus.widget.amount)}`}
+              </Button>
+            </div>
+            {bonusMsg && <p className="mt-3 text-center text-xs text-muted">{bonusMsg}</p>}
+            <p className="mt-3.5 text-[11.5px] text-faint">
+              The one-time {bonus ? formatChips(bonus.widget.amount) : '100,000'} goes to a wallet that
+              registered a hoodfi.eth name through the widget on HoodPoker.
+            </p>
           </CardContent>
         </Card>
 

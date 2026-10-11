@@ -44,6 +44,13 @@ async function post<T>(path: string, auth: ApiAuth, body?: unknown): Promise<T> 
   return data;
 }
 
+/** HoodFi bonuses collected — mirrors bonusStatus() in worker/src/bonus.ts. */
+export interface BonusStatus {
+  /** `week` = the Friday (AST) the current week opened; `nextAt` = ms when the next one opens. */
+  weekly: { amount: number; claimed: boolean; week: string; nextAt: number };
+  widget: { amount: number; claimed: boolean };
+}
+
 /** House Pass whitelist — mirrors worker/src/whitelist.ts. */
 export interface WhitelistStatus {
   /** Sign-ups so far, waitlist included. */
@@ -94,6 +101,12 @@ export const api = {
   profile: (address: string) => get<{ profile: PlayerProfile | null }>(`/profile/${address}`),
   claim: (auth: ApiAuth) =>
     post<{ claimed: number }>('/claim', auth),
+  bonus: (address: string) => get<BonusStatus>(`/bonus?address=${address.toLowerCase()}`),
+  /** 50,000 a week: the worker verifies one of these names on-chain and pays against it. */
+  claimWeekly: (auth: ApiAuth, names: string[]) =>
+    post<{ claimed: number; name: string }>('/bonus/hoodfi-weekly', auth, { names }),
+  /** 100,000 once: the worker finds this wallet's purchase in the router's logs. */
+  claimWidget: (auth: ApiAuth) => post<{ claimed: number }>('/bonus/widget', auth),
   /** Save which owned name to play under — follows the wallet to any device. */
   saveHandle: (auth: ApiAuth, name: string) => post<{ handle: string }>('/handle', auth, { name }),
   /** Private tables this wallet is on the guest list for (last 24h). */

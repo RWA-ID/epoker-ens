@@ -43,7 +43,7 @@ export default function DisclaimerPage() {
         <List
           items={[
             'Chips have no monetary value and no exchange rate to any currency, token or asset.',
-            'Chips are never sold on their own, and cannot be sold, traded, gifted, withdrawn or redeemed. A House Pass comes with a one-time chip stack; once credited, those chips are the same play money as any other.',
+            'Chips are never sold on their own, and cannot be sold, traded, gifted, withdrawn or redeemed. A House Pass pays chips every 12 hours and a one-time chip stack, and hoodfi.eth name owners get bonus chips; once credited, those chips are the same play money as any other.',
             'Chips are not stored on any blockchain. They are rows in our database, not tokens in your wallet.',
             'Balances, the daily claim amount and the leaderboard may be adjusted, reset or wiped at any time — including at the end of a season or after an exploit.',
           ]}

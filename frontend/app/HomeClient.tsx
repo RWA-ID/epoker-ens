@@ -23,7 +23,7 @@ import { Faq } from '@/components/Faq';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
 import { PassChecker } from '@/components/PassChecker';
 import { WhitelistSignup } from '@/components/WhitelistSignup';
-import { MEMBER_PERKS, PASS_SUPPLY, PASS_TIERS, fmt, tierArt } from '@/lib/housePass';
+import { HOODFI_WEEKLY_CHIPS, MEMBER_PERKS, WIDGET_BONUS_CHIPS, PASS_SUPPLY, PASS_TIERS, fmt, tierArt } from '@/lib/housePass';
 import { MintStages, PassFineprint } from '@/components/PassStages';
 
 const CHAIN_NAME = 'Robinhood Chain';
@@ -393,6 +393,12 @@ export default function HomePage() {
               Registration opens on hoodfi.name. HoodPoker earns a small margin on every
               name claimed through here.
             </p>
+            <p className="mt-4 max-w-[560px] text-[15px] leading-[1.6] text-cream">
+              Register one here and your wallet gets a one-time{' '}
+              <span className="text-acid">{fmt(WIDGET_BONUS_CHIPS)} chips</span>, then{' '}
+              <span className="text-acid">{fmt(HOODFI_WEEKLY_CHIPS)}</span> every Friday while you
+              hold it. Claim both on your profile.
+            </p>
           </div>
           <HoodfiWidget />
         </div>
@@ -449,14 +455,14 @@ export default function HomePage() {
                     />
                     <p className="mt-1.5 truncate text-[12.5px] leading-tight text-cream">{tier.name}</p>
                     <p className="font-mono text-[10.5px] tabular-nums text-faint">
-                      {fmt(tier.supply)} · {fmt(tier.chips)}
+                      {fmt(tier.supply)} · {fmt(tier.claimChips)}/12h
                     </p>
                   </Link>
                 </li>
               ))}
             </ul>
             <p className="mt-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-faint">
-              Supply · one-time chip stack ·{' '}
+              Supply · chips every 12 hours, plus a one-time stack ·{' '}
               <Link href="/pass/" className="text-acid underline underline-offset-4">
                 every tier&rsquo;s perks
               </Link>
@@ -482,7 +488,8 @@ export default function HomePage() {
             <PassFineprint />
 
             <p className="mt-5 text-[13.5px] leading-[1.6] text-faint">
-              Minting opens October 15 on OpenSea; stage times and the link go out on X first.
+              Minting opens October 15 at 5:30pm AST on OpenSea; the link goes out on X first.
+              Hold a hoodfi.eth name? That&rsquo;s {fmt(HOODFI_WEEKLY_CHIPS)} chips every Friday, pass or not.
               Follow{' '}
               <a
                 href="https://x.com/hoodpokercasino"

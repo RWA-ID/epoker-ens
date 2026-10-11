@@ -53,7 +53,8 @@ const metadata = (tokenId, tier) => ({
   name: `House Pass #${tokenId} — ${tier.name}`,
   description:
     `HoodPoker House Pass: ${tier.name}, 1 of ${n(tier.supply)}. Membership for HoodPoker, free-chip Texas Hold'em on Robinhood Chain. ` +
-    `Comes with a one-time ${n(tier.chips)}-chip stack, credited once per pass. Chips are virtual play chips with no cash value — ` +
+    `Pays ${n(tier.claimChips)} chips every 12 hours, and a one-time ${n(tier.chips)}-chip stack to each wallet that holds it. ` +
+    'Chips are virtual play chips with no cash value — ' +
     'they cannot be sold, transferred, withdrawn or redeemed. Perks: https://hoodpoker.fun/pass/',
   image: `${IMAGE_BASE}${tier.image}`,
   external_url: 'https://hoodpoker.fun/pass/',
@@ -61,6 +62,7 @@ const metadata = (tokenId, tier) => ({
     { trait_type: 'Tier', value: tier.name },
     { trait_type: 'Rarity', value: `1 of ${n(tier.supply)}` },
     { trait_type: 'Chip Stack', value: tier.chips, display_type: 'number' },
+    { trait_type: 'Chips Every 12h', value: tier.claimChips, display_type: 'number' },
     { trait_type: 'Card', value: tier.card },
   ],
 });
@@ -68,7 +70,7 @@ const metadata = (tokenId, tier) => ({
 const dir = join('metadata-out', String(args.seed).replace(/^0x/, '').slice(0, 12));
 mkdirSync(join(dir, 'json'), { recursive: true });
 const csvCell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-const rows = ['tokenID,name,description,file_name,external_url,attributes[Tier],attributes[Rarity],attributes[Chip Stack],attributes[Card]'];
+const rows = ['tokenID,name,description,file_name,external_url,attributes[Tier],attributes[Rarity],attributes[Chip Stack],attributes[Chips Every 12h],attributes[Card]'];
 const tokens = {};
 deck.forEach((tierId, i) => {
   const id = FIRST_ID + i;
@@ -76,7 +78,7 @@ deck.forEach((tierId, i) => {
   const m = metadata(id, tier);
   tokens[id] = tierId;
   writeFileSync(join(dir, 'json', String(id)), JSON.stringify(m));
-  rows.push([id, m.name, m.description, tier.image, m.external_url, tier.name, `1 of ${n(tier.supply)}`, tier.chips, tier.card].map(csvCell).join(','));
+  rows.push([id, m.name, m.description, tier.image, m.external_url, tier.name, `1 of ${n(tier.supply)}`, tier.chips, tier.claimChips, tier.card].map(csvCell).join(','));
 });
 writeFileSync(join(dir, 'metadata.csv'), rows.join('\n') + '\n');
 writeFileSync(join(dir, 'assignment.json'), JSON.stringify({ seed: args.seed, firstId: FIRST_ID, tiers, tokens }, null, 1));

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { pageMetadata } from '@/lib/seo';
-import { MEMBER_PERKS, PASS_SUPPLY, PASS_TIERS, fmt, tierArt } from '@/lib/housePass';
+import { HOODFI_BONUSES, MEMBER_PERKS, PASS_SUPPLY, PASS_TIERS, fmt, tierArt } from '@/lib/housePass';
 import { MintStages, PassFineprint } from '@/components/PassStages';
 import { PassChecker } from '@/components/PassChecker';
 
@@ -73,11 +73,19 @@ export default function PassPage() {
                   1 of {fmt(tier.supply)} · {pct(tier.supply)} of passes
                 </p>
 
-                <div className="mt-4 rounded-btn border border-acid/25 bg-acid/[0.05] px-4 py-3">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">One-time chip stack</p>
-                  <p className={'mt-1 font-mono tabular-nums leading-none ' + (crown ? 'text-[24px] text-[#e8c56a] lg:text-[36px]' : 'text-[24px] text-acid')}>
-                    {fmt(tier.chips)}
-                  </p>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-btn border border-acid/25 bg-acid/[0.05] px-4 py-3">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">Every 12 hours</p>
+                    <p className={'mt-1 font-mono tabular-nums leading-none ' + (crown ? 'text-[22px] text-[#e8c56a] lg:text-[32px]' : 'text-[22px] text-acid')}>
+                      {fmt(tier.claimChips)}
+                    </p>
+                  </div>
+                  <div className="rounded-btn border border-cream/10 px-4 py-3">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">One-time stack</p>
+                    <p className={'mt-1 font-mono tabular-nums leading-none ' + (crown ? 'text-[22px] text-[#e8c56a] lg:text-[32px]' : 'text-[22px] text-cream')}>
+                      {fmt(tier.chips)}
+                    </p>
+                  </div>
                 </div>
 
                 <ul className="mt-4 grid gap-2 text-[14px] leading-[1.5]">
@@ -117,13 +125,38 @@ export default function PassPage() {
           </ul>
 
           <div className="mt-8 rounded-card border border-cream/10 p-5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">How the chip stack lands</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">How the chips land</p>
             <p className="mt-2 text-[14.5px] leading-[1.6] text-muted">
-              Perks switch on after the mint, once the collection is revealed. Sign in with the
-              wallet holding the pass and its stack is added to your bankroll. Each pass pays out{' '}
-              <span className="text-cream">once, ever</span>: it&rsquo;s tracked by token, not by
-              wallet, so a pass that changes hands keeps its badge and member perks but not a second
-              stack. Hold several passes and each one pays its own stack.
+              From mint day, every pass pays a flat 15,000 chips every 12 hours. The tiers are
+              dealt at the reveal, after the public stage closes: then each pass switches to its
+              tier&rsquo;s drop and its one-time stack lands. Sign in with the wallet holding the
+              pass to claim. Hold several passes and each one pays.{' '}
+              <span className="text-cream">The perks follow the pass</span>: buy one on the secondary
+              market and your wallet gets everything, the stack included. The 12-hour clock stays with
+              the pass, so moving it doesn&rsquo;t reset the timer, and a wallet never collects the
+              same pass&rsquo;s stack twice.
+            </p>
+          </div>
+
+          <div className="mt-8 rounded-card border border-acid/25 bg-acid/[0.04] p-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-acid">HoodFi name owners, pass or no pass</p>
+            <ul className="mt-3 grid gap-2.5">
+              {HOODFI_BONUSES.map((b) => (
+                <li key={b.title} className="flex gap-3">
+                  <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-acid" />
+                  <p className="text-[14.5px] leading-[1.55] text-cream">
+                    {b.title}
+                    <span className="text-muted"> — {b.body}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[13.5px] leading-[1.6] text-faint">
+              Claim both on your{' '}
+              <Link href="/profile/" className="text-acid underline underline-offset-4">
+                profile
+              </Link>
+              .
             </p>
           </div>
 

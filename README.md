@@ -336,8 +336,8 @@ are at risk during the window.
 ## House Pass NFT
 
 A membership NFT: 7,777 passes in seven tiers. The allowlist stages are free
-(gas only); the **public stage costs 0.00077 ETH**, which pays for development,
-infrastructure and maintenance. Minting on **OpenSea from October 15, 2026**. Contract:
+(gas only); the **public stage costs 0.001777 ETH**, which pays for development,
+infrastructure and maintenance. Minting on **OpenSea from October 15, 2026, 5:00pm AST**. Contract:
 "HoodPoker House Pass" (`HPASS`), ERC721 on Robinhood Chain, deployed through
 OpenSea Studio, 7.77% creator earnings, enforced. This repo holds the sign-up
 side, the snapshot script, the metadata script, the landing-page section
@@ -347,7 +347,7 @@ side, the snapshot script, the metadata script, the landing-page section
 78244737**, and is published with the site as `frontend/public/pass/ccff00-snapshot.json`
 (4,343 holders, the 3,333 longest picked) so the address checker on `/#pass`
 and `/pass/` can answer without a wallet. **Whitelist and HoodFi names snapshot
-on October 13, 2026**, when sign-ups close (`WHITELIST_OPEN = "0"`). That run
+on October 14, 2026**, when sign-ups close (`WHITELIST_OPEN = "0"`). That run
 must reuse the published CCFF00 list instead of re-ranking:
 
 ```bash
@@ -356,16 +356,26 @@ node scripts/house-pass-snapshot.mjs --write --ccff00-from=../frontend/public/pa
 ```
 
 A picked holder who sells after October 2 keeps their spot; a wallet that buys
-CCFF00 after it isn't added. The allowlist CSVs get uploaded to OpenSea on
-October 14.
+CCFF00 after it isn't added. The allowlist CSVs get uploaded to OpenSea the same day,
+October 14, before the mint. `hoodfi.csv` carries a mint limit of 2; the others 1.
+
+Stages run back to back, times AST (UTC-4):
+
+| Stage | Opens | Runs |
+| --- | --- | --- |
+| 0. Team | Oct 15, 5:00pm | 30 min |
+| 1. CCFF00 | Oct 15, 5:30pm | 3 h |
+| 2. Whitelist | Oct 15, 8:30pm | 2 h |
+| 3. HoodFi names | Oct 15, 10:30pm | 12 h |
+| 4. Public | Oct 16, 10:30am | 77 d 7 h 7 min, to **Jan 1 2027, 5:37pm** |
 
 | Stage | Who | Cap |
 | --- | --- | --- |
 | 0. Team | One wallet (the founder's), up to 100, minted first for giveaways after the mint. Its allowlist is that single address | 100 |
 | 1. CCFF00 | One per holder, however many they hold. 4,343 holders at block 78244737, so the **3,333 longest holders**. Free | 3,333 |
 | 2. Whitelist | One per person: repost the pinned post on X, then sign up on the site with your X handle + wallet (reposts checked at the snapshot). CCFF00 holders may join; those picked for stage 1 are dropped at the snapshot and the waitlist backfills | 2,222 |
-| 3. HoodFi names | One per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C`. Last way in before public, including for CCFF00 holders who missed the cut | 1,111 |
-| 4. Public | One per wallet, **0.00077 ETH** | 1,111 |
+| 3. HoodFi names | **Two** per owner of a name on the HoodFi registry `0xf2bABA012244bdD7445129597350054E1B3aEe5C`. Last way in before public, including for CCFF00 holders who missed the cut | 1,111 |
+| 4. Public | One per wallet, **0.001777 ETH** | 1,111 |
 
 The team's 100 come out of the 7,777, so the public stage gets whatever is
 left after stages 0–3. Allowlist stages rarely fill completely; in the
@@ -384,19 +394,30 @@ CCFF00 is `0x505A22Ffed8d37ebE580FfD98d2Cdb0021189146` on Robinhood Chain.
 and `worker/scripts/house-pass-metadata.mjs` deals the collection from it (and
 refuses to run if the supplies don't add up to 7,777).
 
-| Tier | Supply | One-time chip stack |
-| --- | --- | --- |
-| Crown Jewel | 77 | 1,000,000 |
-| The River | 111 | 500,000 |
-| The Nuts | 333 | 250,000 |
-| The Button | 777 | 150,000 |
-| Royal Flush | 999 | 100,000 |
-| All In | 2,222 | 50,000 |
-| Pocket Rockets | 3,258 | 25,000 |
+| Tier | Supply | Chips every 12 h | One-time chip stack |
+| --- | --- | --- | --- |
+| Crown Jewel | 77 | 100,000 | 1,000,000 |
+| The River | 111 | 60,000 | 500,000 |
+| The Nuts | 333 | 40,000 | 250,000 |
+| The Button | 777 | 30,000 | 150,000 |
+| Royal Flush | 999 | 25,000 | 100,000 |
+| All In | 2,222 | 20,000 | 50,000 |
+| Pocket Rockets | 3,258 | 15,000 | 25,000 |
 
 Every pass also gets the shared member perks (`MEMBER_PERKS` in
-`frontend/lib/housePass.ts`). The chip stack is credited **once per token,
-ever**, keyed by token id, not wallet, so passing a pass around can't farm it.
+`frontend/lib/housePass.ts`). **Perks follow the pass** so a pass bought on the
+secondary market is worth having (Hector, 2026-10-10):
+
+- **Before the reveal** (mint day to Jan 1 2027) every pass pays a **flat 15,000
+  every 12 h**, since tiers aren't dealt yet; tier amounts and stacks start at reveal
+  (Hector, 2026-10-10).
+- **12-hour drop**: each pass pays its tier's amount to whoever holds it. The
+  cooldown is kept **per token**, so moving a pass doesn't reset its clock, and
+  each pass a wallet holds pays separately.
+- **One-time stack**: once per **(token, wallet)**: a new owner gets it, a
+  wallet that already took a token's stack never gets it again. Cycling one
+  pass through fresh wallets can farm it; accepted, since chips are play money
+  and the leaderboard ranks profit per hand.
 
 ```bash
 cd worker
@@ -411,7 +432,21 @@ token, a `metadata.csv` for Studio's bulk upload (check its header against
 OpenSea's current template first) and `assignment.json`, the token → tier map
 the worker will read.
 
-The perks are **copy, not behaviour** yet: the worker still grants every player
+### HoodFi bonuses (live, `worker/src/bonus.ts`)
+
+For hoodfi.eth name owners, pass or no pass. Ledger = D1 `bonus_claims`
+(migration 006); `npm run test:bonus` (21 checks on real SQLite).
+
+- **50,000 chips a week** (`POST /bonus/hoodfi-weekly`). Weeks open **Friday
+  00:00 AST**; claim any time before the next. Direct names only
+  (`label.hoodfi.eth`; subnames are free to mint). Paid once per wallet **and**
+  once per name per week, so one name passed between wallets pays once.
+- **100,000 chips once per wallet** (`POST /bonus/widget`) for registering a
+  name through the HoodPoker widget: the worker finds a `PartnerRegistration`
+  log on the router `0xB7Bd…4b5d` with our partner `0x5f11…165b` and this wallet
+  as buyer. Every sale since the router deployed counts.
+
+The pass perks are **copy, not behaviour** yet: the worker still grants every player
 the same daily chips and reads nothing about passes. They go into the worker
 once the contract address and the reveal exist.
 

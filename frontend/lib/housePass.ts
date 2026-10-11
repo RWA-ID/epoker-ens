@@ -16,8 +16,10 @@ export interface PassTier {
   id: string;
   name: string;
   supply: number;
-  /** One-time chip stack, credited once per token ever. */
+  /** One-time chip stack, credited once per token per wallet. */
   chips: number;
+  /** Chips this token pays every 12 hours. */
+  claimChips: number;
   /** The caption printed on the card art. */
   card: string;
 }
@@ -36,7 +38,7 @@ export const tierArt = (id: string) => `/pass/${id}.jpg`;
  * (which ranks profit per hand). DAILY_CHIPS is 5,000 on a 24h cooldown today.
  */
 export const MEMBER_PERKS = [
-  { title: '15,000 daily chips', body: 'three times the free drop, claimable every 12 hours instead of 24.' },
+  { title: 'Chips every 12 hours', body: 'a flat 15,000 per pass from mint day; at the reveal each pass switches to its tier’s drop, from 15,000 to 100,000. On top of the free daily chips, and each pass you hold pays.' },
   { title: 'Bust-out top-up', body: 'run your stack to zero and get back in once a day, without waiting for the drop.' },
   { title: 'Team tournaments', body: 'build a team and host bracket nights. Anyone can play in them — members run them.' },
   { title: 'A room that stays', body: 'a permanent private table with your name on it, reserved seats and a spectator link.' },
@@ -54,19 +56,55 @@ export const CCFF00_SNAPSHOT = {
   url: '/pass/ccff00-snapshot.json',
 };
 
+/** Whitelist and HoodFi names are snapshotted on this day; sign-ups close then. */
+export const SNAPSHOT_DATE = 'October 14';
+
 /**
- * Mint stages. Caps are Hector's 2026-10-01 numbers; the whitelist cap is
- * enforced live by worker/src/whitelist.ts. Allowlist stages are free; public
- * pays PUBLIC_PRICE_ETH toward development, infrastructure and maintenance.
+ * Mint stages, back to back on OpenSea, times in AST (UTC-4). Caps are
+ * Hector's 2026-10-01 numbers; the whitelist cap is enforced live by
+ * worker/src/whitelist.ts. Allowlist stages are free; public pays
+ * PUBLIC_PRICE_ETH toward development, infrastructure and maintenance. The
+ * team stage (100 to one wallet, for giveaways) runs 5:00–5:30pm first and
+ * isn't listed.
  */
 export const MINT_STAGES = [
   {
     name: 'CCFF00 holders',
     cap: '3,333',
     price: 'Free',
+    when: 'Oct 15 · 5:30pm, 3 hours',
     who: `snapshot taken ${CCFF00_SNAPSHOT.date}: the 3,333 longest of ${fmt(CCFF00_SNAPSHOT.holders)} holders, one pass each`,
   },
-  { name: 'Whitelist', cap: '2,222', price: 'Free', who: 'one per person — repost our pinned post on X, then sign up with your handle, including CCFF00 holders who missed the cut' },
-  { name: 'HoodFi name owners', cap: '1,111', price: 'Free', who: 'own a hoodfi.eth name at the October 13 snapshot' },
-  { name: 'Public', cap: '1,111', price: `${PUBLIC_PRICE_ETH} ETH`, who: 'one per wallet, open to anyone. The price funds development, infrastructure and maintenance' },
+  {
+    name: 'Whitelist',
+    cap: '2,222',
+    price: 'Free',
+    when: 'Oct 15 · 8:30pm, 2 hours',
+    who: `one per person — repost our pinned post on X, then sign up with your handle before the ${SNAPSHOT_DATE} snapshot, including CCFF00 holders who missed the cut`,
+  },
+  {
+    name: 'HoodFi name owners',
+    cap: '1,111',
+    price: 'Free',
+    when: 'Oct 15 · 10:30pm, 12 hours',
+    who: `two per wallet that owns a hoodfi.eth name at the ${SNAPSHOT_DATE} snapshot`,
+  },
+  {
+    name: 'Public',
+    cap: '1,111',
+    price: `${PUBLIC_PRICE_ETH} ETH`,
+    when: 'Oct 16 · 10:30am, until Jan 1 · 5:37pm',
+    who: 'one per wallet, open to anyone, for 77 days, 7 hours and 7 minutes. The price funds development, infrastructure and maintenance',
+  },
+];
+
+/**
+ * HoodFi bonuses: for name owners, pass or no pass. Unlike the pass perks
+ * these are live in the worker (POST /bonus/hoodfi-weekly, /bonus/widget).
+ */
+export const HOODFI_WEEKLY_CHIPS = 50_000;
+export const WIDGET_BONUS_CHIPS = 100_000;
+export const HOODFI_BONUSES = [
+  { title: `${fmt(HOODFI_WEEKLY_CHIPS)} chips every Friday`, body: 'for any wallet that owns a hoodfi.eth name. A new week opens each Friday at midnight AST; claim it any time before the next one.' },
+  { title: `${fmt(WIDGET_BONUS_CHIPS)} chips, once`, body: 'register a hoodfi.eth name through the widget here on HoodPoker and that wallet gets a one-time bonus.' },
 ];

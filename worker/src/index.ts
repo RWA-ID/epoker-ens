@@ -17,6 +17,9 @@
  *   POST /handle                 save which owned name to play under { name } (auth)
  *   GET  /invites                private tables you're on the guest list for (auth)
  *   POST /claim                  daily free chips (auth)
+ *   GET  /bonus?address=         HoodFi bonuses collected: { weekly, widget } — see src/bonus.ts
+ *   POST /bonus/hoodfi-weekly    50,000 chips a week for a hoodfi.eth name owner { names } (auth)
+ *   POST /bonus/widget           100,000 chips once for a name bought through our widget (auth)
  *   GET  /whitelist?address=     House Pass sign-ups: { count, cap, waitlist, open, joined?, position? }
  *   POST /whitelist              sign up { address, handle, turnstile } — no auth; one per wallet + per X handle
  *   GET  /auth/nonce             one-time SIWE nonce
@@ -34,6 +37,7 @@ import { MAX_PLAYERS, PRACTICE_TABLE_ID, WhitelistEntry } from './poker/types';
 import { joinWhitelist, OWN_HANDLE, parseHandle, parseWallet, whitelistStatus } from './whitelist';
 import { turnstileOk } from './turnstile';
 import { checkHandle } from './handle';
+import { boughtViaWidget, bonusStatus, claimWeekly, payBonus, WIDGET_BONUS_CHIPS } from './bonus';
 
 export { TableDO } from './table';
 
@@ -341,6 +345,36 @@ export default {
 
         if (!res.meta.changes) return json({ error: 'already claimed in the last 24h' }, 429);
         return json({ claimed: DAILY_CHIPS });
+      }
+
+      /* ---------------- HoodFi bonuses ---------------- */
+
+      if (path === '/bonus' && request.method === 'GET') {
+        const raw = (url.searchParams.get('address') ?? '').toLowerCase();
+        if (!/^0x[0-9a-f]{40}$/.test(raw)) return json({ error: 'address required' }, 400);
+        return json(await bonusStatus(env, raw));
+      }
+
+      if (path === '/bonus/hoodfi-weekly' && request.method === 'POST') {
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+        if (!(await underLimit(env.AUTH_LIMITER, `bonus:${address}`))) return json({ error: 'slow down' }, 429);
+        const body = (await request.json().catch(() => ({}))) as { names?: unknown };
+        const result = await claimWeekly(env, address, body.names);
+        return result.ok ? json(result) : json({ error: result.error }, result.status);
+      }
+
+      if (path === '/bonus/widget' && request.method === 'POST') {
+        const address = await requireAuth(request, url, env);
+        if (!address) return json({ error: 'unauthorized' }, 401);
+        if (!(await underLimit(env.AUTH_LIMITER, `bonus:${address}`))) return json({ error: 'slow down' }, 429);
+        const bought = await boughtViaWidget(address);
+        if (bought === 'unavailable') return json({ error: 'Robinhood Chain didn’t answer — try again.' }, 503);
+        if (bought === 'no') return json({ error: 'No name registered through the HoodPoker widget from this wallet yet.' }, 404);
+        if (!(await payBonus(env, address, 'widget', 'once', null, WIDGET_BONUS_CHIPS))) {
+          return json({ error: 'Already claimed — this bonus pays once per wallet.' }, 429);
+        }
+        return json({ claimed: WIDGET_BONUS_CHIPS });
       }
 
       /* ---------------- House Pass whitelist ---------------- */
