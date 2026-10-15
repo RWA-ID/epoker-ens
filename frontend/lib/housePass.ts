@@ -59,6 +59,9 @@ export const CCFF00_SNAPSHOT = {
 /** Whitelist and HoodFi names are snapshotted on this day; sign-ups close then. */
 export const SNAPSHOT_DATE = 'October 14';
 
+/** Sign-ups closed at the snapshot (worker WHITELIST_OPEN=0, 2026-10-14). */
+export const WHITELIST_CLOSED = true;
+
 /**
  * Mint stages, back to back on OpenSea, times in AST (UTC-4). Caps are
  * Hector's 2026-10-01 numbers; the whitelist cap is enforced live by
@@ -67,33 +70,44 @@ export const SNAPSHOT_DATE = 'October 14';
  * team stage (100 to one wallet, for giveaways) runs 5:00–5:30pm first and
  * isn't listed.
  */
+/** The drop on OpenSea. Linked from the countdown in #pass and on /pass/. */
+export const OPENSEA_URL = 'https://opensea.io/collection/hoodpoker/overview';
+
 export const MINT_STAGES = [
   {
     name: 'CCFF00 holders',
     cap: '3,333',
     price: 'Free',
-    when: 'Oct 15 · 5:30pm, 3 hours',
+    when: 'Oct 15 · 5:30pm, 2 hours',
+    start: '2026-10-15T17:30:00-04:00',
+    end: '2026-10-15T19:30:00-04:00',
     who: `snapshot taken ${CCFF00_SNAPSHOT.date}: the 3,333 longest of ${fmt(CCFF00_SNAPSHOT.holders)} holders, one pass each`,
   },
   {
     name: 'Whitelist',
     cap: '2,222',
     price: 'Free',
-    when: 'Oct 15 · 8:30pm, 2 hours',
-    who: `one per person — repost our pinned post on X, then sign up with your handle before the ${SNAPSHOT_DATE} snapshot, including CCFF00 holders who missed the cut`,
+    when: 'Oct 15 · 7:30pm, 2 hours',
+    start: '2026-10-15T19:30:00-04:00',
+    end: '2026-10-15T21:30:00-04:00',
+    who: `one per person, signed up before the ${SNAPSHOT_DATE} snapshot, including CCFF00 holders who missed the cut`,
   },
   {
     name: 'HoodFi name owners',
     cap: '1,111',
     price: 'Free',
-    when: 'Oct 15 · 10:30pm, 12 hours',
+    when: 'Oct 15 · 9:30pm, 2 hours',
+    start: '2026-10-15T21:30:00-04:00',
+    end: '2026-10-15T23:30:00-04:00',
     who: `two per wallet that owns a hoodfi.eth name at the ${SNAPSHOT_DATE} snapshot`,
   },
   {
     name: 'Public',
     cap: '1,111',
     price: `${PUBLIC_PRICE_ETH} ETH`,
-    when: 'Oct 16 · 10:30am, until Jan 1 · 5:37pm',
+    when: 'Oct 15 · 11:30pm, until Jan 1 · 6:37am',
+    start: '2026-10-15T23:30:00-04:00',
+    end: '2027-01-01T06:37:00-04:00',
     who: 'one per wallet, open to anyone, for 77 days, 7 hours and 7 minutes. The price funds development, infrastructure and maintenance',
   },
 ];

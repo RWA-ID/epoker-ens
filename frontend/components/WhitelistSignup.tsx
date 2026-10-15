@@ -18,6 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type WhitelistJoin, type WhitelistStatus } from '@/lib/api';
 import { TURNSTILE_SITE_KEY, WHITELIST_POST_URL } from '@/lib/config';
 import { useIdentity } from '@/lib/identity';
+import { SNAPSHOT_DATE, WHITELIST_CLOSED } from '@/lib/housePass';
 import { Button } from '@/components/ui/button';
 
 const REFUSED: Record<Extract<WhitelistJoin, { ok: false }>['reason'], string> = {
@@ -43,11 +44,12 @@ function standing(position: number, cap: number): string {
 const TURNSTILE_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 
 /** Loads Turnstile once and renders it into `ref`; the token lands in state. */
-function useTurnstile(ref: React.RefObject<HTMLDivElement | null>) {
+function useTurnstile(ref: React.RefObject<HTMLDivElement | null>, enabled: boolean) {
   const [token, setToken] = useState<string | null>(null);
   const widget = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const render = () => {
       if (cancelled || !ref.current || !window.turnstile || widget.current) return;
@@ -75,7 +77,7 @@ function useTurnstile(ref: React.RefObject<HTMLDivElement | null>) {
       if (widget.current) window.turnstile?.remove(widget.current);
       widget.current = null;
     };
-  }, [ref]);
+  }, [ref, enabled]);
 
   /** A token is single-use: reset after every submit, pass or fail. */
   const reset = () => {
@@ -98,7 +100,6 @@ export function WhitelistSignup() {
   const [joining, setJoining] = useState(false);
   const [message, setMessage] = useState<{ tone: 'good' | 'muted'; text: string } | null>(null);
   const turnstileRef = useRef<HTMLDivElement>(null);
-  const { token, reset } = useTurnstile(turnstileRef);
 
   useEffect(() => {
     try { setSaved(localStorage.getItem(SAVED_KEY)); } catch { /* private mode */ }
@@ -121,7 +122,9 @@ export function WhitelistSignup() {
   const spotsTaken = Math.min(count, cap);
   const waitlisted = Math.max(0, count - cap);
   const full = count >= cap + waitlist;
-  const closed = !!data && !data.open;
+  // Closed at build time too, so the static HTML never flashes the form.
+  const closed = WHITELIST_CLOSED || (!!data && !data.open);
+  const { token, reset } = useTurnstile(turnstileRef, !closed);
   const joined = data?.joined === true;
   const pct = Math.min(100, (spotsTaken / cap) * 100);
 
@@ -192,6 +195,12 @@ export function WhitelistSignup() {
         <div className="h-full rounded-full bg-acid transition-[width] duration-700" style={{ width: `${pct}%` }} />
       </div>
 
+      {closed ? (
+        <p className="mt-3 text-[14px] leading-[1.5] text-muted">
+          Sign-ups closed at the {SNAPSHOT_DATE} snapshot. Check any wallet in the pass checker above.
+        </p>
+      ) : (
+      <>
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-[14px] leading-[1.5] text-muted">
         <li>
           Repost{' '}
@@ -203,9 +212,10 @@ export function WhitelistSignup() {
         <li>Paste your X handle (or your repost link) and the wallet to mint with.</li>
       </ol>
       <p className="mt-2 text-[13px] leading-[1.5] text-faint">
-        {n(cap)} free mints, one per person, plus a {n(waitlist)} waitlist. Reposts are checked at the
-        snapshot, so a handle that didn&rsquo;t repost is dropped then. No wallet connection needed.
+        {n(cap)} free mints, one per person, plus a {n(waitlist)} waitlist. No wallet connection needed.
       </p>
+      </>
+      )}
 
       {joined && data?.position && !message && (
         <p className="mt-3 text-[14px] leading-[1.5] text-acid" role="status">
@@ -213,6 +223,7 @@ export function WhitelistSignup() {
         </p>
       )}
 
+      {!closed && (
       <form
         className="mt-3.5 space-y-2.5"
         onSubmit={(e) => {
@@ -247,6 +258,7 @@ export function WhitelistSignup() {
           {label}
         </Button>
       </form>
+      )}
 
       {message && (
         <p

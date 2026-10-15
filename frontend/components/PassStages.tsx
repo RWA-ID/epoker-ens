@@ -3,11 +3,13 @@
  * section (#pass) and the perks page (/pass/) so the two can't drift.
  */
 import { MINT_STAGES, PUBLIC_PRICE_ETH } from '@/lib/housePass';
+import { MintCountdown } from './MintCountdown';
 
 export function MintStages() {
   return (
     <div className="mt-7">
-      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
+      <MintCountdown />
+      <p className="mt-7 font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
         Four stages · allowlists free · public {PUBLIC_PRICE_ETH} ETH · from October 15, 5:30pm AST
       </p>
       <ol className="mt-3 grid gap-2">

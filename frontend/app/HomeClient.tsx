@@ -488,7 +488,7 @@ export default function HomePage() {
             <PassFineprint />
 
             <p className="mt-5 text-[13.5px] leading-[1.6] text-faint">
-              Minting opens October 15 at 5:30pm AST on OpenSea; the link goes out on X first.
+              Minting opens October 15 at 5:30pm AST on OpenSea, at the link above.
               Hold a hoodfi.eth name? That&rsquo;s {fmt(HOODFI_WEEKLY_CHIPS)} chips every Friday, pass or not.
               Follow{' '}
               <a

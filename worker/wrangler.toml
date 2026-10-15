@@ -46,7 +46,7 @@ ALLOWED_ORIGINS = "https://epoker.eth.limo,https://epoker.eth.link,https://hoodp
 ALLOW_LEGACY_SIG = "0"
 MAINNET_RPC = "https://ethereum-rpc.publicnode.com"
 # House Pass whitelist sign-ups: "1" = open. Set "0" and redeploy to close at the snapshot.
-WHITELIST_OPEN = "1"
+WHITELIST_OPEN = "0"
 # Cloudflare Realtime SFU app for Spaces (voice). The secret is SFU_APP_SECRET.
 SFU_APP_ID = "8fba5a4e7075cc526dedba9053f0b65d"
 
