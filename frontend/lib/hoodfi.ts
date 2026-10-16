@@ -17,9 +17,10 @@
  *   3. Read `names(node)` (DNS-encoded) and the `avatar` text record in the
  *      same pass, decoding the name client-side.
  *
- * Reverse resolution is deliberately not used: a hoodfi subname lives on L2
- * and its holder has no mainnet primary name, so `getEnsName(address)` returns
- * null for every one of them.
+ * Reverse resolution can't be the only source: a hoodfi holder *can* set one as
+ * their mainnet primary (hoodfi.name/manage), but most never will, so
+ * `getEnsName(address)` is null for them. When they have set one, identity.ts
+ * prefers it over the shortest-name default.
  */
 import { useQuery } from '@tanstack/react-query';
 import { createPublicClient, http, type Address } from 'viem';

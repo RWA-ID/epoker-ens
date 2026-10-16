@@ -3,7 +3,9 @@
  * Who a player is at the table.
  *
  * Handle priority:
- *   1. a hoodfi.eth name they own on Robinhood Chain (their pick, if they made one)
+ *   1. a hoodfi.eth name they own on Robinhood Chain — their pick here if they
+ *      made one, else their ENS primary if that is a hoodfi name they own, else
+ *      the shortest
  *   2. their mainnet ENS primary name
  *   3. the truncated address
  *
@@ -85,7 +87,12 @@ export function useIdentity(): Identity {
   // A pick is only honoured while they still own that name.
   const choice = pick ?? serverHandle ?? null;
   const picked = choice && owned.some((n) => n.name === choice) ? choice : null;
-  const hoodfiHandle = picked ?? owned[0]?.name ?? null;
+  // Their ENS primary, when it's a hoodfi name they hold, beats the shortest-name
+  // default — it is the name they chose everywhere, not just here. `useEnsName`
+  // already checks it resolves back to this address, so a bare reverse record
+  // can't claim someone else's name.
+  const primaryHoodfi = ensName && owned.some((n) => n.name === ensName) ? ensName : null;
+  const hoodfiHandle = picked ?? primaryHoodfi ?? owned[0]?.name ?? null;
   const handle = hoodfiHandle ?? ensName ?? null;
 
   // Mainnet avatar record — only fetched when the handle is a mainnet name.
