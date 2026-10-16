@@ -141,6 +141,8 @@ export class TableDO implements DurableObject {
   private graceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** The voice Space, built on first use for tables created with one. */
   private spaceRoom: Space | null = null;
+  /** Last time keepListed() wrote the lobby row. */
+  private listedAt = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -338,6 +340,7 @@ export class TableDO implements DurableObject {
       }
     }
     this.sockets.set(ws, session);
+    this.keepListed();
 
     const player = this.players.get(session.address);
     if (player) {
@@ -440,6 +443,7 @@ export class TableDO implements DurableObject {
       isConnected: (address) => this.sessionFor(address) !== null,
       identity: (address) => this.sessionFor(address),
       broadcast: () => this.broadcast(),
+      alive: () => this.keepListed(),
       notify: (address, text) => {
         for (const [sock, s] of this.sockets) if (s.address === address) this.send(sock, { type: 'notice', text });
       },
@@ -675,6 +679,30 @@ export class TableDO implements DurableObject {
       this.config.id, this.config.name, this.config.smallBlind,
       this.humanCount(), this.stage === 'waiting' ? 'waiting' : 'playing', Date.now(),
     ).run().catch(() => { /* best-effort */ });
+  }
+
+  /**
+   * Keep a Space table in the lobby while anyone is in the room.
+   *
+   * The lobby sweeps public tables that have sat at 0 seats for 30 minutes,
+   * and a Space is often hosted with nobody seated — so it vanished from the
+   * lobby mid-Space while followers were still looking for it. Bumping
+   * `created_at` marks the row as recently active; it also re-lists a table
+   * that was already swept. Throttled: sockets and Space ticks are frequent.
+   */
+  private keepListed() {
+    const cfg = this.config;
+    if (!cfg || cfg.isPrivate || cfg.practice || !cfg.space || this.sockets.size === 0) return;
+    const now = Date.now();
+    if (now - this.listedAt < 5 * 60_000) return;
+    this.listedAt = now;
+    void this.env.DB.prepare(
+      `INSERT INTO tables (id, name, small_blind, seats, status, created_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET created_at = excluded.created_at`,
+    ).bind(
+      cfg.id, cfg.name, cfg.smallBlind,
+      this.humanCount(), this.stage === 'waiting' ? 'waiting' : 'playing', now,
+    ).run().catch(() => { this.listedAt = 0; /* retried on the next socket or tick */ });
   }
 
   /* ------------------------------------------------------------------ */

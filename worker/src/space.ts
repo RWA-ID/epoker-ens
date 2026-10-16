@@ -125,6 +125,8 @@ export interface SpaceHost {
   identity(address: string): { handle: string | null; avatar: string | null } | null;
   /** Push fresh state to everyone. */
   broadcast(): void;
+  /** Called on every tick of a live Space (keeps the table in the lobby). */
+  alive?(): void;
   /** One notice to one person (e.g. "the host muted you"). */
   notify(address: string, text: string): void;
 }
@@ -446,8 +448,9 @@ export class Space {
 
   private checkEndings() {
     if (!this.live) return;
+    this.table.alive?.();
     const now = Date.now();
-    const mods = [this.table.hostAddress, ...this.cohosts];
+    const mods =[this.table.hostAddress, ...this.cohosts];
     const modHere = mods.some((a) => this.table.isConnected(a));
     this.hostGoneSince = modHere ? null : (this.hostGoneSince ?? now);
 

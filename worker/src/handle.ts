@@ -214,7 +214,18 @@ export async function checkHandle(
 
   if (name.endsWith('.hoodfi.eth')) {
     const owned = await ownsHoodfiName(address, name, rpc.robinhood);
-    if (owned === 'unavailable') return { status: 'unavailable' };
+    if (owned === 'unavailable') {
+      // The Robinhood RPC throttles Workers, and with nothing cached for this
+      // name (a fresh pick, a new ENS primary) the player sat down nameless and
+      // faceless. Mainnet ENS reaches the same registry through the hoodfi L1
+      // resolver over a different RPC, so it can prove the name instead.
+      // Only "couldn't ask" falls through here — a name the registry says is
+      // someone else's stays unverified above.
+      const viaMainnet = await verifyMainnetName(address, name, rpc.mainnet);
+      return viaMainnet
+        ? { status: 'verified', handle: name, avatar: viaMainnet.avatar, avatarKnown: viaMainnet.avatar !== null }
+        : { status: 'unavailable' };
+    }
     if (owned === 'not-owned') return { status: 'unverified' };
     const av = await hoodfiAvatar(name, rpc.robinhood);
     return {
