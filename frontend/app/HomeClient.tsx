@@ -20,6 +20,7 @@ import { CreateTable } from '@/components/CreateTable';
 import { Invites } from '@/components/Invites';
 import { Ticker } from '@/components/Ticker';
 import { Faq } from '@/components/Faq';
+import { LeaderboardAvatar } from '@/components/LeaderboardAvatar';
 import { HoodfiWidget } from '@/components/HoodfiWidget';
 import { PassChecker } from '@/components/PassChecker';
 import { WhitelistSignup } from '@/components/WhitelistSignup';
@@ -317,8 +318,11 @@ export default function HomePage() {
                 >
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <span className="hp-display hp-w85 truncate text-[16px] font-extrabold text-cream">
-                  {displayName(row.handle, row.address)}
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <LeaderboardAvatar handle={row.handle} avatar={row.avatar} address={row.address} size="sm" />
+                  <span className="hp-display hp-w85 truncate text-[16px] font-extrabold text-cream">
+                    {displayName(row.handle, row.address)}
+                  </span>
                 </span>
                 <span className="hidden text-right font-mono text-[13px] text-muted xs:block">
                   {formatChips(row.handsPlayed)}

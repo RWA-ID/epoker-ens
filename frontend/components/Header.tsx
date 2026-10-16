@@ -88,8 +88,10 @@ export function Header() {
     // Bounded inside useWallet — falling through to the local clear is the point.
     await disconnectWallet();
     if (who) clearSession(who);
-    setBusy(false);
-    setMenuOpen(false);
+    // Then sweep what the libraries leave behind (wallet keys in localStorage,
+    // the WalletConnect IndexedDB) and reload, so the page comes back from a
+    // clean slate instead of whatever half-state the wallet libraries hold.
+    await resetWalletSession();
   };
 
   return (

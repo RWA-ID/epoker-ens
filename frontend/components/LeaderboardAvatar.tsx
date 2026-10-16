@@ -11,6 +11,7 @@ import { Avatar } from './Avatar';
 import { cn } from '@/lib/utils';
 
 const SIZES = {
+  sm: { cls: 'h-8 w-8 text-[13px]', px: 32 },
   md: { cls: 'h-10 w-10 text-[15px]', px: 40 },
   lg: { cls: 'h-14 w-14 text-[22px]', px: 56 },
 } as const;

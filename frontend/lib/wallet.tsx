@@ -22,7 +22,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAccount, useDisconnect, useSignMessage as useWagmiSignMessage } from 'wagmi';
-import { useAppKit } from '@reown/appkit/react';
+import { useAppKit, useDisconnect as useAppKitDisconnect } from '@reown/appkit/react';
 import { usePrivy, useSignMessage as usePrivySignMessage } from '@privy-io/react-auth';
 
 /**
@@ -57,6 +57,7 @@ export function useWallet(): Wallet {
   const { address: appkitAddress, status } = useAccount();
   const { signMessageAsync } = useWagmiSignMessage();
   const { disconnectAsync } = useDisconnect();
+  const { disconnect: disconnectAppKit } = useAppKitDisconnect();
 
   const { ready, authenticated, user, logout } = usePrivy();
   const { signMessage: privySignMessage } = usePrivySignMessage();
@@ -103,11 +104,16 @@ export function useWallet(): Wallet {
     // never arrives would leave the button spinning forever.
     const bounded = (p: Promise<unknown>) =>
       Promise.race([p, new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
+    // AppKit first: wagmi's disconnect alone left AppKit's own "connected"
+    // record in storage, and AppKit reconnected from it on the next load — so
+    // Disconnect did nothing, and even a hard refresh came back signed in.
+    // Unconditional: a half-restored session is exactly the one to kill.
     await Promise.all([
+      bounded(disconnectAppKit()),
       appkitLive ? bounded(disconnectAsync()) : null,
       authenticated ? bounded(logout()) : null,
     ]);
-  }, [appkitLive, authenticated, disconnectAsync, logout]);
+  }, [appkitLive, authenticated, disconnectAppKit, disconnectAsync, logout]);
 
   return {
     address,
