@@ -65,8 +65,14 @@ export function Seat({
   return (
     <div
       className={cn(
-        'flex flex-col-reverse items-center gap-1 tilt:flex-col-reverse',
-        cardSide === 'above' ? 'sm:flex-col-reverse' : cardSide === 'left' ? 'sm:flex-row-reverse' : 'sm:flex-row',
+        'flex flex-col-reverse items-center gap-1',
+        !(cardSide === 'above' && inward) && 'tilt:flex-col-reverse',
+        // A front seat's cards go beside the pill, on the felt side. Above it
+        // (even slid inward) a showdown hand reached the board's end card,
+        // and in tilt the side seat's pill too.
+        cardSide === 'above'
+          ? inward === 'right' ? 'sm:flex-row tilt:flex-row' : inward === 'left' ? 'sm:flex-row-reverse tilt:flex-row-reverse' : 'sm:flex-col-reverse'
+          : cardSide === 'left' ? 'sm:flex-row-reverse' : 'sm:flex-row',
         view.folded && 'opacity-40',
       )}
     >
@@ -131,9 +137,6 @@ export function Seat({
           className={cn(
             'flex flex-col items-center gap-1',
             faceDown && !view.bet && 'hidden sm:flex tilt:hidden',
-            // Above the pill, your enlarged hand reached the side seat's cards and bet.
-            yourHand && cardSide === 'above' && inward === 'right' && 'sm:translate-x-[60%] tilt:translate-x-0',
-            yourHand && cardSide === 'above' && inward === 'left' && 'sm:-translate-x-[60%] tilt:translate-x-0',
           )}
         >
           {hasCards ? (

@@ -72,13 +72,32 @@ const FEATHER = {
   WebkitMaskComposite: 'source-in',
 } as const;
 
+/**
+ * Tilt mode's crop: the slice of the 3:2 art that is shown. A landscape phone is
+ * ~2.2:1, so the whole art only fits at a fraction of the width. The room
+ * above the back rail and the foreground under the front chairs carry no
+ * seats, so they go and the felt fills the width instead.
+ */
+export type FeltCrop = { top: number; bottom: number };
+export const TILT_CROP: FeltCrop = { top: 0.19, bottom: 0.1 };
+/** Width ÷ height of the visible window for a crop. */
+export const cropAspect = (c: FeltCrop) => 1.5 / (1 - c.top - c.bottom);
+
+/** Same feather, with the vertical fade moved to the crop's edges. */
+function cropFeather(c: FeltCrop) {
+  const t = c.top * 100;
+  const b = 100 - c.bottom * 100;
+  const mask = `linear-gradient(to right, transparent, #000 5%, #000 95%, transparent), linear-gradient(to bottom, transparent ${t}%, #000 ${t + 6}%, #000 ${b - 2}%, transparent ${b}%)`;
+  return { ...FEATHER, maskImage: mask, WebkitMaskImage: mask };
+}
+
 /** The room, its edges feathered into the page backdrop. */
-function TableArt() {
+function TableArt({ crop }: { crop?: FeltCrop }) {
   return (
     <div
       aria-hidden
       className="pointer-events-none absolute inset-0 bg-cover bg-center"
-      style={{ ...FEATHER, backgroundImage: "url('/table-live.jpg')" }}
+      style={{ ...(crop ? cropFeather(crop) : FEATHER), backgroundImage: "url('/table-live.jpg')" }}
     />
   );
 }
@@ -87,25 +106,40 @@ export function PokerTable({
   state,
   onSit,
   children,
+  crop,
 }: {
   state: TableView;
   onSit: (seat: number) => void;
   /** Overlays drawn inside the felt (status chips, toasts, hand result). */
   children?: ReactNode;
+  /** Show only a horizontal band of the art (tilt mode). */
+  crop?: FeltCrop;
 }) {
   const seatMap = new Map(state.seats.map((s) => [s.seat, s]));
   const inHand = state.stage !== 'waiting';
   const canSit = state.canSit && state.yourSeat === null && state.seats.length < state.maxPlayers;
   const layout = SEAT_LAYOUTS[Math.min(state.maxPlayers, 8)] ?? SEAT_LAYOUTS[8];
 
+  const visible = crop ? 1 - crop.top - crop.bottom : 1;
+
+  // Cropped, the outer box is the visible window and the full 3:2 table is
+  // slid up inside it. Nothing is clipped: the art's mask fades out at the
+  // crop line, and a pill or card that pokes past it stays readable.
   return (
-    <div className="relative mx-auto w-full max-w-6xl select-none">
+    <div
+      className="relative mx-auto w-full max-w-6xl select-none"
+      style={crop ? { aspectRatio: `${cropAspect(crop)}` } : undefined}
+    >
+    <div
+      className={crop ? 'absolute inset-x-0' : 'relative'}
+      style={crop ? { top: `${(-crop.top / visible) * 100}%` } : undefined}
+    >
       {/* The table art */}
       <div className="relative aspect-[3/2] w-full overflow-hidden">
-        <TableArt />
+        <TableArt crop={crop} />
 
         {/* Pot + community cards, over the cleared centre of the felt */}
-        <div className="absolute left-1/2 top-[57%] flex -translate-x-1/2 -translate-y-1/2 scale-[0.62] flex-col items-center gap-3 rounded-[20px] px-5 py-4 [background:radial-gradient(closest-side,rgba(4,6,2,0.82),rgba(4,6,2,0.15))] sm:scale-[0.8] md:scale-95 tilt:scale-[0.62]">
+        <div className="absolute left-1/2 top-[57%] flex -translate-x-1/2 -translate-y-1/2 scale-[0.62] flex-col items-center gap-3 rounded-[20px] px-5 py-4 [background:radial-gradient(closest-side,rgba(4,6,2,0.82),rgba(4,6,2,0.15))] sm:scale-[0.8] md:scale-95 tilt:top-[55%] tilt:scale-[0.56] tilt:gap-2">
           {/* `pot` is every chip committed this hand, the current street's
               bets included, so this is the full amount at stake. */}
           {state.pot > 0 && (
@@ -181,8 +215,6 @@ export function PokerTable({
             </div>
           </div>
         )}
-
-        {children}
       </div>
 
       {/* Seats, outside the clipped image so pills are never cut off. */}
@@ -210,6 +242,10 @@ export function PokerTable({
           </div>
         );
       })}
+    </div>
+
+      {/* Over the visible window, so a crop can't push the chips off screen. */}
+      <div className="pointer-events-none absolute inset-0 z-20 [&>*]:pointer-events-auto">{children}</div>
     </div>
   );
 }

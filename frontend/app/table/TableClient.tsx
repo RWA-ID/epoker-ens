@@ -10,9 +10,11 @@
  * Layout (from the Claude Design table handoff):
  *   desktop     header bar · felt + betting dock · Chat/Hand log docked right
  *   phone       header bar · felt + betting dock · Chat button → bottom drawer
- *   full screen a fixed layer over the whole viewport; landscape puts the dock
- *               beside the felt. "Rotate" turns it 90° for portrait-locked
- *               wallet browsers. A landscape phone enters it automatically.
+ *   full screen a fixed layer over the whole viewport. On a landscape phone
+ *               (tilt, or "Rotate" for portrait-locked wallet browsers) the
+ *               felt is cropped to fill the width with one short row of
+ *               buttons under it; a desktop puts the dock beside the felt.
+ *               A landscape phone enters it automatically.
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -25,7 +27,7 @@ import type { TableView } from '@/lib/types';
 import { installAudioUnlock, isMuted, setMuted, unlockAudio } from '@/lib/sounds';
 import { displayName, formatChips, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { PokerTable } from '@/components/PokerTable';
+import { PokerTable, TILT_CROP, cropAspect } from '@/components/PokerTable';
 import { ActionBar } from '@/components/ActionBar';
 import { Boombox } from '@/components/Boombox';
 import { stopMusic, useMusic } from '@/lib/music';
@@ -315,6 +317,9 @@ export function TableScreen({
   const inHand = state.stage !== 'waiting';
   const rotated = full && portrait && rotation !== 0 ? rotation : null;
   const wide = layer && (!!rotated || !portrait);
+  // A landscape phone: no room for a side column, so the felt takes the
+  // width and the buttons go in one strip below it.
+  const strip = wide && !sideDock;
 
   const panel = (onClose?: () => void) => (
     <TablePanel
@@ -340,10 +345,25 @@ export function TableScreen({
     if (!docked && !sideDock) setDrawerOpen(true);
   };
 
+  // Listening is one tap from the felt: joining a Space puts you in the
+  // audience with no mic, so there's nothing to confirm. Speaking is a
+  // separate request, from the felt or the Space tab.
+  const spaceOn = space.status === 'on';
+  const onStage = !!state.space?.you && state.space.you !== 'listener';
+  const tapSpace = () => {
+    if (space.status === 'off' && state.space?.canJoin) space.join();
+    else openSpace();
+  };
+
   /* ---------- Pieces ---------- */
 
   const headerBar = (
-    <header className={cn('flex flex-wrap items-center justify-between gap-x-3 gap-y-2', layer ? 'shrink-0' : 'mb-3')}>
+    <header
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-x-3 gap-y-2',
+        layer ? 'shrink-0' : 'mb-3',
+      )}
+    >
       <div className="flex min-w-0 flex-1 basis-[220px] items-center gap-2.5 sm:gap-4">
         <Link
           href="/"
@@ -412,17 +432,42 @@ export function TableScreen({
     </header>
   );
 
+  const spaceCount = state.space ? state.space.stage.length + state.space.listeners : 0;
+  const spaceChips = state.space?.live && (
+    <>
+      <FeltChip onClick={tapSpace} pressed={spaceOn} accent={!spaceOn}>
+        {!strip && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-acid" />}
+        {space.status === 'joining'
+          ? 'Joining…'
+          : spaceOn
+            ? `Listening · ${spaceCount}`
+            : `🎧 Listen · ${spaceCount}`}
+      </FeltChip>
+      {spaceOn && (
+        onStage ? (
+          <FeltChip onClick={space.toggleMic} pressed={!space.muted}>
+            {space.micBusy ? 'Mic…' : space.muted ? 'Unmute' : 'Mute'}
+          </FeltChip>
+        ) : (
+          <FeltChip
+            onClick={() => table.spaceCmd({ type: state.space?.handRaised ? 'space:lower' : 'space:raise' })}
+            pressed={state.space.handRaised}
+          >
+            ✋ {state.space.handRaised ? 'Hand up' : 'Ask to speak'}
+          </FeltChip>
+        )
+      )}
+      {spaceOn && <FeltChip onClick={space.leave}>Leave Space</FeltChip>}
+    </>
+  );
+
   const feltOverlays = (
     <>
+      {!strip && (
       <div className="absolute left-2 top-2 z-20 flex max-w-[calc(100%-16px)] flex-wrap gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em] sm:left-3 sm:top-2.5 sm:text-[9.5px]">
         {state.practice && <FeltChip>Practice · vs bots</FeltChip>}
         {state.isPrivate && <FeltChip>Private</FeltChip>}
-        {state.space?.live && (
-          <FeltChip onClick={openSpace} pressed={space.status === 'on'}>
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-acid" />
-            {space.status === 'on' ? 'In Space' : 'Space live'} · {state.space.stage.length + state.space.listeners}
-          </FeltChip>
-        )}
+        {spaceChips}
         <FeltChip onClick={toggleSound} pressed={!muted}>
           <SoundIcon muted={muted} size={11} />
           {muted ? 'Sounds off' : 'Sounds on'}
@@ -435,10 +480,20 @@ export function TableScreen({
           </FeltChip>
         )}
       </div>
+      )}
 
-      {musicOpen && !docked && !sideDock && (
+      {musicOpen && !docked && !sideDock && !strip && (
         <div className="absolute left-2 top-9 z-30 w-[min(250px,46%)] rounded-xl border border-cream/[0.14] bg-night-950/90 p-2 shadow-[0_14px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm sm:left-3 sm:top-10">
           <Boombox />
+        </div>
+      )}
+
+      {space.error && !table.error && (
+        <div
+          role="alert"
+          className="absolute left-1/2 top-[12%] z-30 max-w-[80%] -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-950/95 px-3 py-1.5 text-center font-mono text-[11px] text-red-200 shadow-lg sm:text-[12px]"
+        >
+          {space.error}
         </div>
       )}
 
@@ -473,7 +528,9 @@ export function TableScreen({
     </>
   );
 
-  const felt = <PokerTable state={state} onSit={table.sit}>{feltOverlays}</PokerTable>;
+  const felt = (
+    <PokerTable state={state} onSit={table.sit} crop={strip ? TILT_CROP : undefined}>{feltOverlays}</PokerTable>
+  );
 
   /* ---------- Full-screen layer ---------- */
 
@@ -485,11 +542,67 @@ export function TableScreen({
           style={rotated ? rotatedStyle(rotated) : undefined}
           className={cn(
             // `relative` lifts the table above the absolute backdrop.
-            'relative flex flex-col gap-2 p-2',
+            cn('relative flex flex-col p-2', strip ? 'gap-1.5' : 'gap-2'),
             !rotated && 'h-full w-full pb-[max(8px,env(safe-area-inset-bottom))] pl-[max(8px,env(safe-area-inset-left))] pr-[max(8px,env(safe-area-inset-right))] pt-[max(8px,env(safe-area-inset-top))]',
           )}
         >
-          {headerBar}
+          {!strip && headerBar}
+          {strip ? (
+            <>
+              {/* No header row: its buttons and the felt chips stand in two
+                  rails beside the felt, so the felt gets the full height and,
+                  cropped, nearly the full width. Nothing is drawn over it. */}
+              <div className="flex min-h-0 flex-1 gap-1.5">
+                <Rail>
+                  <RailLink href="/">← Lobby</RailLink>
+                  <FeltChip onClick={() => setDrawerOpen(true)}>
+                    <ChatIcon />Chat
+                    {unread > 0 && <span className="rounded-full bg-acid px-1 text-[8px] font-semibold tracking-normal text-ink">{unread > 9 ? '9+' : unread}</span>}
+                  </FeltChip>
+                  <FeltChip onClick={copyInvite}><LinkIcon />{copied ? 'Copied' : 'Invite'}</FeltChip>
+                  {full && portrait && (
+                    <FeltChip
+                      onClick={() => { const next = nextRotation(rotation); setRotatePref(next); writeRotatePref(next); }}
+                      pressed={!!rotated}
+                    >
+                      <RotateIcon />{rotated ? 'Upright' : 'Rotate'}
+                    </FeltChip>
+                  )}
+                  {full && <FeltChip onClick={toggleFull}><CollapseIcon />Exit</FeltChip>}
+                  {state.practice && <FeltChip>Practice</FeltChip>}
+                  {state.isPrivate && <FeltChip>Private</FeltChip>}
+                </Rail>
+                <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center [container-type:size]">
+                  <div style={{ width: `min(100cqw, ${cropAspect(TILT_CROP) * 100}cqh)` }}>{felt}</div>
+                </div>
+                <Rail>
+                  {spaceChips}
+                  <FeltChip onClick={toggleSound} pressed={!muted}>
+                    <SoundIcon muted={muted} size={11} />{muted ? 'Off' : 'Sound'}
+                  </FeltChip>
+                  <FeltChip onClick={() => setMusicOpen((o) => !o)} pressed={musicOpen}>
+                    <span className={cn(music.playing && 'text-acid')}>♪</span>Music
+                  </FeltChip>
+                  {me && (
+                    <button
+                      onClick={table.leave}
+                      className="rounded-[5px] border border-[#ff4d5e]/45 bg-[#ff4d5e]/10 px-1.5 py-1.5 uppercase tracking-[0.12em] text-[#ff8b95]"
+                    >
+                      Leave
+                    </button>
+                  )}
+                </Rail>
+              </div>
+              {musicOpen && (
+                <div className="absolute right-[96px] top-2 z-30 w-[250px] rounded-xl border border-cream/[0.14] bg-night-950/90 p-2 shadow-[0_14px_40px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+                  <Boombox />
+                </div>
+              )}
+              <div className="relative z-10 shrink-0">
+                <ActionBar state={state} onAct={table.act} row columns={4} />
+              </div>
+            </>
+          ) : (
           <div className={cn('flex min-h-0 flex-1 gap-2', !wide && 'flex-col')}>
             {/* Sized by container units so the 3:2 felt fits whichever way is
                 tighter; the bottom padding leaves room for the foreground
@@ -503,6 +616,7 @@ export function TableScreen({
               <ActionBar state={state} onAct={table.act} compact columns={wide ? 2 : 4} />
             </div>
           </div>
+          )}
           <TableDrawer open={drawerOpen} onClose={closeDrawer}>{panel(closeDrawer)}</TableDrawer>
           {browserHint && (
             <BrowserHint
@@ -651,16 +765,39 @@ function BarButton({
   );
 }
 
+/** A column of chips beside the felt in the landscape-phone strip. */
+function Rail({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex w-[84px] shrink-0 flex-col justify-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.12em] [&>*]:w-full [&>*]:justify-center [&>*]:whitespace-normal [&>*]:text-center">
+      {children}
+    </div>
+  );
+}
+
+function RailLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="flex items-center rounded-[5px] border border-cream/20 bg-cream/[0.05] px-1.5 py-1.5 text-cream">
+      {children}
+    </Link>
+  );
+}
+
 function FeltChip({
   children,
   onClick,
   pressed,
+  accent = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   pressed?: boolean;
+  /** Draws the eye: a call to action, not a status. */
+  accent?: boolean;
 }) {
-  const cls = 'flex items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-cream/[0.14] bg-[rgba(5,6,3,0.7)] px-2 py-1 uppercase text-dim sm:px-[9px] sm:py-[5px]';
+  const cls = cn(
+    'flex items-center gap-1.5 whitespace-nowrap rounded-[5px] border bg-[rgba(5,6,3,0.7)] px-2 py-1 uppercase sm:px-[9px] sm:py-[5px]',
+    accent ? 'border-acid/60 text-acid' : pressed ? 'border-acid/40 text-acid' : 'border-cream/[0.14] text-dim',
+  );
   return onClick ? (
     <button
       onClick={onClick}

@@ -18,6 +18,7 @@ export function ActionBar({
   onAct,
   compact = false,
   columns = 'auto',
+  row = false,
 }: {
   state: TableView;
   onAct: (action: ActionType, amount?: number) => void;
@@ -25,6 +26,8 @@ export function ActionBar({
   compact?: boolean;
   /** Button grid: 2×2, one row of 4, or 2×2 on phones and 4 from `sm`. */
   columns?: 2 | 4 | 'auto';
+  /** Tilt mode: one short strip under the felt, raise sizing left of the buttons. */
+  row?: boolean;
 }) {
   const me = state.seats.find((s) => s.seat === state.yourSeat);
   const acting = state.seats.find((s) => s.acting);
@@ -72,25 +75,26 @@ export function ActionBar({
   const btn = cn(
     'hp-display hp-w80 flex items-center justify-center whitespace-nowrap rounded-lg px-2 uppercase transition-colors',
     'disabled:cursor-not-allowed disabled:opacity-35',
-    compact ? 'h-11 text-[15px]' : 'h-12 text-[16px] sm:h-14 sm:text-[19px]',
+    row ? 'h-9 text-[13px]' : compact ? 'h-11 text-[15px]' : 'h-12 text-[16px] sm:h-14 sm:text-[19px]',
   );
 
   return (
     <div
       className={cn(
-        'flex w-full flex-col rounded-xl border border-cream/[0.12] bg-gradient-to-b from-[#0e1009] to-[#080805]',
-        compact ? 'gap-2 p-2' : 'gap-2.5 px-3 pb-3 pt-2.5 sm:px-3.5',
+        'flex w-full rounded-xl border border-cream/[0.12] bg-gradient-to-b from-[#0e1009] to-[#080805]',
+        row ? 'flex-row items-center gap-2 px-2 py-1.5' : 'flex-col',
+        !row && (compact ? 'gap-2 p-2' : 'gap-2.5 px-3 pb-3 pt-2.5 sm:px-3.5'),
       )}
     >
       {/* Top row: fixed height whatever it holds */}
-      <div className={cn('flex min-w-0 items-center gap-3', compact ? 'h-9' : 'h-11 sm:h-12')}>
+      <div className={cn('flex min-w-0 items-center gap-3', row ? 'h-9 flex-1' : compact ? 'h-9' : 'h-11 sm:h-12')}>
         {canRaise ? (
           <>
             <span className="flex min-w-[64px] flex-col leading-none sm:min-w-[92px]">
               <span className="mb-1 font-mono text-[9px] uppercase tracking-[0.18em] text-dim sm:text-[9.5px]">
                 {isOpening ? 'Bet' : 'Raise to'}
               </span>
-              <span className={cn('hp-display hp-w80 tabular-nums text-acid', compact ? 'text-[20px]' : 'text-[22px] sm:text-[30px]')}>
+              <span className={cn('hp-display hp-w80 tabular-nums text-acid', row ? 'text-[17px]' : compact ? 'text-[20px]' : 'text-[22px] sm:text-[30px]')}>
                 {formatChips(amount)}
               </span>
             </span>
@@ -138,6 +142,7 @@ export function ActionBar({
       <div
         className={cn(
           'grid gap-2',
+          row && 'w-[min(58%,440px)] shrink-0 gap-1.5',
           columns === 2 && 'grid-cols-2',
           columns === 4 && 'grid-cols-4',
           columns === 'auto' && 'grid-cols-2 sm:grid-cols-4',
